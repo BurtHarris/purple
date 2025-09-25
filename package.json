@@ -25,5 +25,32 @@
         "title": "Focus Color Toggle: Apply Now"
       }
     ]
+    ,
+    "configuration": {
+      "type": "object",
+      "title": "Focus Color Toggle",
+      "properties": {
+        "focusColorToggle.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable the focus color toggle extension."
+        },
+        "focusColorToggle.toggleTitleBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle title bar colors on focus changes."
+        },
+        "focusColorToggle.toggleActivityBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle activity bar colors on focus changes."
+        },
+        "focusColorToggle.toggleStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle status bar colors on focus changes."
+        }
+      }
+    }
   }
 }

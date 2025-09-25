@@ -105,6 +105,18 @@ TODO
 - Package a .vsix and publish or provide an installer for invited testers.
 - Add a settings page so users can pick which UI elements to change and set color values.
 
+Settings
+--------
+
+You can control what the extension changes in your VS Code settings (Preferences → Settings). The following settings are available:
+
+- `focusColorToggle.enabled` (boolean) — Enable or disable the extension.
+- `focusColorToggle.toggleTitleBar` (boolean) — Change the title bar colors when focus changes.
+- `focusColorToggle.toggleActivityBar` (boolean) — Change the activity bar colors when focus changes.
+- `focusColorToggle.toggleStatusBar` (boolean) — Change the status bar colors when focus changes.
+
+Toggle these settings on or off to pick a light or stronger focus indicator.
+
 Usage
 -----
 
