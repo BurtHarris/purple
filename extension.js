@@ -1,5 +1,8 @@
 const vscode = require('vscode');
 
+let outputChannel = null;
+let extensionMode = null;
+
 const ACTIVE = {
   titleBar: {
     "titleBar.activeBackground": "#49124b",
@@ -11,7 +14,11 @@ const ACTIVE = {
   },
   statusBar: {
     "statusBar.background": "#49124b",
-    "statusBar.foreground": "#ffffff"
+    "statusBar.foreground": "#ffffff",
+    // ensure both folder and no-folder status bar keys are set so the status bar
+    // background is correct whether a workspace/folder is open or not
+    "statusBar.noFolderBackground": "#49124b",
+    "statusBar.noFolderForeground": "#ffffff"
   }
 };
 
@@ -21,10 +28,15 @@ const INACTIVE = {
     "titleBar.inactiveForeground": "#e6e6e6"
   },
   activityBar: {
-    "activityBar.inactiveBackground": "#0f0f0f",
-    "activityBar.inactiveForeground": "#e6e6e6"
+    // Some themes ignore the 'inactive' activityBar keys; set the main keys so
+    // the activity bar darkens when the window is unfocused
+    "activityBar.background": "#0f0f0f",
+    "activityBar.foreground": "#e6e6e6"
   },
   statusBar: {
+    // set both keys so the inactive palette applies whether a folder is open
+    "statusBar.background": "#0f0f0f",
+    "statusBar.foreground": "#e6e6e6",
     "statusBar.noFolderBackground": "#0f0f0f",
     "statusBar.noFolderForeground": "#e6e6e6"
   }
@@ -46,18 +58,98 @@ function merge(current, patch) {
 function applyColors(colors) {
   const cfg = vscode.workspace.getConfiguration();
   const current = cfg.get('workbench.colorCustomizations') || {};
+
+  // Merge into the general colorCustomizations
   const merged = merge(current, colors);
-  return cfg.update('workbench.colorCustomizations', merged, vscode.ConfigurationTarget.Global);
+
+  // Also merge into the active theme-specific block (if present or create one)
+  // Theme keys in workbench.colorCustomizations use the format: "[Theme Name]"
+  const theme = getActiveThemeName();
+  if (theme) {
+    const themeKey = `[${theme}]`;
+    const themeBlock = current[themeKey] || {};
+    merged[themeKey] = merge(themeBlock, colors);
+  }
+
+  // Debug: show merged color customizations in the output channel so it's visible
+  try {
+    if (outputChannel) {
+      outputChannel.appendLine('Applying color customizations:');
+      outputChannel.appendLine(JSON.stringify(merged, null, 2));
+    }
+  } catch (e) {
+    // ignore logging errors
+  }
+
+  // Determine where to write the customizations: global/workspace/both
+  const updateTargetSetting = vscode.workspace.getConfiguration().get('focusColorToggle.updateTarget', 'global');
+  const targets = mapUpdateTargetToConfigTargets(updateTargetSetting);
+
+  // Apply to each target (usually just one). Return a Promise that resolves when all updates complete.
+  const updates = targets.map(t => cfg.update('workbench.colorCustomizations', merged, t));
+  return Promise.all(updates);
+}
+
+function mapUpdateTargetToConfigTargets(setting) {
+  switch (setting) {
+    case 'workspace':
+      return [vscode.ConfigurationTarget.Workspace];
+    case 'both':
+      return [vscode.ConfigurationTarget.Global, vscode.ConfigurationTarget.Workspace];
+    case 'global':
+    default:
+      return [vscode.ConfigurationTarget.Global];
+  }
+}
+
+// Return the currently active theme name. Prefer the explicit setting when present,
+// otherwise fall back to the runtime active color theme label (works when theme is
+// set by workspace or defaults and not stored in settings.json).
+function getActiveThemeName() {
+  const configured = vscode.workspace.getConfiguration('workbench').get('colorTheme');
+  if (configured) return configured;
+  // activeColorTheme is available in newer VS Code APIs and exposes the label.
+  const active = vscode.window.activeColorTheme;
+  if (active && typeof active.label === 'string') return active.label;
+  return null;
 }
 
 function activate(context) {
+  // create an output channel for debugging in the Extension Host
+  outputChannel = vscode.window.createOutputChannel('RiverShade');
+  extensionMode = context.extensionMode;
+  outputChannel.appendLine(`RiverShade activated (mode=${extensionMode})`);
+  // read configuration early so we can include it in the activation artifact and
+  // avoid referencing `settings` before it's declared
   const cfg = vscode.workspace.getConfiguration();
+  // support both old keys (focusColorToggle.*) and new riverShade.* aliases
   const settings = {
-    enabled: cfg.get('focusColorToggle.enabled', true),
-    toggleTitleBar: cfg.get('focusColorToggle.toggleTitleBar', true),
-    toggleActivityBar: cfg.get('focusColorToggle.toggleActivityBar', true),
-    toggleStatusBar: cfg.get('focusColorToggle.toggleStatusBar', true)
+    enabled: cfg.get('riverShade.enabled', cfg.get('focusColorToggle.enabled', true)),
+    toggleTitleBar: cfg.get('riverShade.toggleTitleBar', cfg.get('focusColorToggle.toggleTitleBar', true)),
+    toggleActivityBar: cfg.get('riverShade.toggleActivityBar', cfg.get('focusColorToggle.toggleActivityBar', true)),
+    toggleStatusBar: cfg.get('riverShade.toggleStatusBar', cfg.get('focusColorToggle.toggleStatusBar', true))
   };
+  // When running in development or test mode, also log to console and write an activation file
+  if (extensionMode === vscode.ExtensionMode.Development || extensionMode === vscode.ExtensionMode.Test) {
+    console.log(`RiverShade activated (mode=${extensionMode})`);
+    try {
+      // write a simple activation artifact to the .vscode-test/logs folder so tests/CI can read it
+      const fs = require('fs');
+      const path = require('path');
+      const logsDir = path.join(__dirname, '.vscode-test', 'logs');
+      if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
+      const theme = getActiveThemeName();
+      const activation = {
+        activatedAt: new Date().toISOString(),
+        mode: String(extensionMode),
+        theme: theme || null
+      };
+      try { activation.settings = settings; } catch (e) { activation.settings = null; }
+      fs.writeFileSync(path.join(logsDir, 'rivershade-activation.json'), JSON.stringify(activation, null, 2), 'utf8');
+    } catch (e) {
+      console.error('Failed to write activation log:', e && e.message);
+    }
+  }
 
   // apply initial state
   if (settings.enabled) {
@@ -70,6 +162,15 @@ function activate(context) {
   });
   context.subscriptions.push(sub);
 
+  // Reapply when the active color theme changes so the theme-specific block is updated
+  if (vscode.window.onDidChangeActiveColorTheme) {
+    const themeSub = vscode.window.onDidChangeActiveColorTheme(() => {
+      if (!settings.enabled) return;
+      applyColors(buildColorsSet(vscode.window.state.focused ? ACTIVE : INACTIVE, settings));
+    });
+    context.subscriptions.push(themeSub);
+  }
+
   const disposable = vscode.commands.registerCommand('focusColorToggle.toggle', () => {
     const isFocused = vscode.window.state.focused;
     if (!settings.enabled) {
@@ -80,6 +181,18 @@ function activate(context) {
     vscode.window.showInformationMessage('Toggled focus colors');
   });
   context.subscriptions.push(disposable);
+
+  // register new RiverShade command id as an alias
+  const disposable2 = vscode.commands.registerCommand('rivershade.toggle', () => {
+    const isFocused = vscode.window.state.focused;
+    if (!settings.enabled) {
+      vscode.window.showInformationMessage('RiverShade is disabled in settings');
+      return;
+    }
+    applyColors(buildColorsSet(isFocused ? INACTIVE : ACTIVE, settings));
+    vscode.window.showInformationMessage('RiverShade: Toggled focus colors');
+  });
+  context.subscriptions.push(disposable2);
 }
 
 exports.activate = activate;

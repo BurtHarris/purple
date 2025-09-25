@@ -1,15 +1,12 @@
 {
-  "name": "vscode-focus-color-toggle",
-  "displayName": "Focus Color Toggle",
+  "name": "rivershade",
+  "displayName": "RiverShade — Focus Color Toggle",
   "publisher": "local",
   "version": "0.0.0",
   "engines": {
-    "vscode": "^1.50.0"
+    "vscode": "^1.75.0"
   },
   "main": "./extension.js",
-  "activationEvents": [
-    "onCommand:focusColorToggle.toggle"
-  ],
   "scripts": {
     "test": "node ./test/runTest.js"
   },
@@ -23,6 +20,10 @@
       {
         "command": "focusColorToggle.toggle",
         "title": "Focus Color Toggle: Apply Now"
+      },
+      {
+        "command": "rivershade.toggle",
+        "title": "RiverShade: Apply Focus Colors"
       }
     ]
     ,
@@ -35,20 +36,54 @@
           "default": true,
           "description": "Enable or disable the focus color toggle extension."
         },
+        "riverShade.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable RiverShade (alias for focusColorToggle.enabled)."
+        },
         "focusColorToggle.toggleTitleBar": {
           "type": "boolean",
           "default": true,
           "description": "Toggle title bar colors on focus changes."
+        },
+        "riverShade.toggleTitleBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle title bar colors on focus changes (alias)."
         },
         "focusColorToggle.toggleActivityBar": {
           "type": "boolean",
           "default": true,
           "description": "Toggle activity bar colors on focus changes."
         },
+        "riverShade.toggleActivityBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle activity bar colors on focus changes (alias)."
+        },
         "focusColorToggle.toggleStatusBar": {
           "type": "boolean",
           "default": true,
           "description": "Toggle status bar colors on focus changes."
+        }
+        ,
+        "riverShade.toggleStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Toggle status bar colors on focus changes (alias)."
+        },
+        "focusColorToggle.updateTarget": {
+          "type": "string",
+          "enum": ["global", "workspace", "both"],
+          "default": "global",
+          "description": "Where to write workbench.colorCustomizations: 'global' (User), 'workspace', or 'both'."
+        }
+        ,
+        "riverShade.updateTarget": {
+          "type": "string",
+          "enum": ["global", "workspace", "both"],
+          "default": "global",
+          "description": "Where to write workbench.colorCustomizations (alias for focusColorToggle.updateTarget)."
         }
       }
     }

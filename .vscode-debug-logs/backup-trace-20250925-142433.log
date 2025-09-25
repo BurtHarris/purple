@@ -1,0 +1,28 @@
+**********************
+PowerShell transcript start
+Start time: 20250925142433
+Username: GLADIATOR\burt_
+RunAs User: GLADIATOR\burt_
+Configuration Name: 
+Machine: GLADIATOR (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\Program Files\PowerShell\7\pwsh.dll -NoProfile -File e:\purple\vscode-focus-toggle\scripts\run-debug-trace.ps1
+Process ID: 9824
+PSVersion: 7.5.3
+PSEdition: Core
+GitCommitId: 7.5.3
+OS: Microsoft Windows 10.0.26100
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+Transcript started, output file is E:\purple\vscode-focus-toggle\.vscode-debug-logs\backup-trace-20250925-142433.log
+Running backup script (no commit)
+
+Running sanitize script
+
+**********************
+PowerShell transcript end
+End time: 20250925142433
+**********************
