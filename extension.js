@@ -142,6 +142,15 @@ function activate(context) {
   outputChannel = vscode.window.createOutputChannel('RiverShade');
   extensionMode = context.extensionMode;
   outputChannel.appendLine(`RiverShade activated (mode=${extensionMode})`);
+  try {
+    // show where the runtime loaded this extension from so developers can verify
+    const loadedFrom = context && context.extensionPath ? context.extensionPath : __dirname;
+    outputChannel.appendLine(`RiverShade loaded from: ${loadedFrom}`);
+    // In development/test modes also show a one-time information message so it's obvious
+    if (extensionMode === vscode.ExtensionMode.Development || extensionMode === vscode.ExtensionMode.Test) {
+      try { vscode.window.showInformationMessage(`RiverShade loaded from: ${loadedFrom}`); } catch (e) { /* ignore UI errors */ }
+    }
+  } catch (e) { /* ignore logging errors */ }
   // read configuration early so we can include it in the activation artifact and
   // avoid referencing `settings` before it's declared
   const cfg = vscode.workspace.getConfiguration();
@@ -165,7 +174,8 @@ function activate(context) {
       const activation = {
         activatedAt: new Date().toISOString(),
         mode: String(extensionMode),
-        theme: theme || null
+        theme: theme || null,
+        extensionPath: context && context.extensionPath ? context.extensionPath : __dirname
       };
       try { activation.settings = settings; } catch (e) { activation.settings = null; }
       fs.writeFileSync(path.join(logsDir, 'rivershade-activation.json'), JSON.stringify(activation, null, 2), 'utf8');
