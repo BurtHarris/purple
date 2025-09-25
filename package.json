@@ -1,0 +1,29 @@
+{
+  "name": "vscode-focus-color-toggle",
+  "displayName": "Focus Color Toggle",
+  "publisher": "local",
+  "version": "0.0.0",
+  "engines": {
+    "vscode": "^1.50.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:focusColorToggle.toggle"
+  ],
+  "scripts": {
+    "test": "node ./test/runTest.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2",
+    "mocha": "^11.7.2",
+    "chai": "^4.3.7"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "focusColorToggle.toggle",
+        "title": "Focus Color Toggle: Apply Now"
+      }
+    ]
+  }
+}
