@@ -155,9 +155,9 @@ function activate(context) {
   if (settings.enabled) {
     applyColors(buildColorsSet(vscode.window.state.focused ? ACTIVE : INACTIVE, settings))
       .catch(err => {
-        try { if (outputChannel) outputChannel.appendLine('Initial applyColors failed: ' + (err && err.message)); } catch (e) {}
-        console.error('Initial applyColors failed', err);
-      });
+          try { if (outputChannel) outputChannel.appendLine('Initial applyColors failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+          console.error('Initial applyColors failed', err);
+        });
   }
 
   const sub = vscode.window.onDidChangeWindowState(st => {
@@ -185,7 +185,7 @@ function activate(context) {
       applyColors(buildColorsSet(isFocused ? INACTIVE : ACTIVE, settings))
         .then(() => vscode.window.showInformationMessage('Toggled focus colors'))
         .catch(err => {
-          try { if (outputChannel) outputChannel.appendLine('focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) {}
+          try { if (outputChannel) outputChannel.appendLine('focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
           console.error('focusColorToggle.toggle failed', err);
           vscode.window.showErrorMessage('Failed to apply focus colors');
         });
@@ -206,7 +206,7 @@ function activate(context) {
       applyColors(buildColorsSet(isFocused ? INACTIVE : ACTIVE, settings))
         .then(() => vscode.window.showInformationMessage('RiverShade: Toggled focus colors'))
         .catch(err => {
-          try { if (outputChannel) outputChannel.appendLine('rivershade.toggle failed: ' + (err && err.message)); } catch (e) {}
+          try { if (outputChannel) outputChannel.appendLine('rivershade.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
           console.error('rivershade.toggle failed', err);
           vscode.window.showErrorMessage('Failed to apply RiverShade focus colors');
         });
