@@ -31,3 +31,8 @@ coverage/
 # OS temporary files
 *.tmp
 *.temp
+
+# Local backups and debug logs created by scripts
+.vscode-user-settings/
+.vscode-debug-logs/
+scripts/.vscode-user-settings/
