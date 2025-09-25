@@ -91,8 +91,15 @@ function applyColors(colors) {
     if (hasTitleBarKeys && !_warnedAboutTitleBarStyle) {
       const titleBarStyle = vscode.workspace.getConfiguration().get('window.titleBarStyle');
       if (titleBarStyle !== 'custom') {
-        _warnedAboutTitleBarStyle = true;
-        try { vscode.window.showInformationMessage('RiverShade: to recolor the title bar set "window.titleBarStyle": "custom" in Settings'); } catch (e) { /* ignore UI errors */ }
+        // Auto-set the title bar style to custom so the title bar recolors as expected.
+        try {
+          // update at global (user) level to affect the native window
+          vscode.workspace.getConfiguration().update('window.titleBarStyle', 'custom', vscode.ConfigurationTarget.Global);
+        } catch (e) {
+          // If we can't write settings, fall back to showing the informational message once
+          _warnedAboutTitleBarStyle = true;
+          try { vscode.window.showInformationMessage('RiverShade: to recolor the title bar set "window.titleBarStyle": "custom" in Settings'); } catch (e) { /* ignore UI errors */ }
+        }
       }
     }
   } catch (e) { /* ignore check errors */ }
