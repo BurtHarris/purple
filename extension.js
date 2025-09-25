@@ -2,6 +2,7 @@ const vscode = require('vscode');
 
 let outputChannel = null;
 let extensionMode = null;
+let _warnedAboutTitleBarStyle = false;
 
 const ACTIVE = {
   titleBar: {
@@ -80,6 +81,21 @@ function applyColors(colors) {
   } catch (e) {
     // ignore logging errors
   }
+
+  // If the merged colors include titleBar keys but the user hasn't enabled the
+  // custom (drawn by VS Code) title bar, the title bar won't change. Warn once
+  // so users understand why their title bar may not recolor.
+  try {
+    const hasTitleBarKeys = Object.keys(merged).some(k => k.startsWith('titleBar.')) ||
+      Object.keys(merged).some(k => k.startsWith('[') && merged[k] && Object.keys(merged[k]).some(kk => kk.startsWith('titleBar.')));
+    if (hasTitleBarKeys && !_warnedAboutTitleBarStyle) {
+      const titleBarStyle = vscode.workspace.getConfiguration().get('window.titleBarStyle');
+      if (titleBarStyle !== 'custom') {
+        _warnedAboutTitleBarStyle = true;
+        try { vscode.window.showInformationMessage('RiverShade: to recolor the title bar set "window.titleBarStyle": "custom" in Settings'); } catch (e) { /* ignore UI errors */ }
+      }
+    }
+  } catch (e) { /* ignore check errors */ }
 
   // Determine where to write the customizations: global/workspace/both
   const updateTargetSetting = vscode.workspace.getConfiguration().get('focusColorToggle.updateTarget', 'global');
