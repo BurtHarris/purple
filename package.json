@@ -8,12 +8,14 @@
   },
   "main": "./extension.js",
   "scripts": {
-    "test": "node ./test/runTest.js"
+    "test": "node ./test/runTest.js",
+    "lint": "eslint \"test/**/*.js\" \"extension.js\" --ext .js"
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
     "mocha": "^11.7.2",
-    "chai": "^4.3.7"
+    "chai": "^4.3.7",
+    "eslint": "^8.48.0"
   },
   "contributes": {
     "commands": [

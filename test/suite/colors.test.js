@@ -1,4 +1,4 @@
-const assert = require('assert');
+const { expect } = require('chai');
 const vscode = require('vscode');
 
 describe('Color application', function() {
@@ -6,9 +6,9 @@ describe('Color application', function() {
 
   it('applies expected status bar color when toggled', async () => {
     const ext = vscode.extensions.getExtension('local.rivershade') || vscode.extensions.getExtension('local.vscode-focus-color-toggle');
-    assert.ok(ext, 'Extension not found');
+    expect(ext).to.exist;
     await ext.activate();
-    assert.ok(ext.isActive, 'Extension did not activate');
+    expect(ext.isActive).to.be.true;
 
     // Ensure initial toggle runs
     await vscode.commands.executeCommand('focusColorToggle.toggle');
@@ -40,9 +40,9 @@ describe('Color application', function() {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    assert.ok(found, `Expected statusBar.background to be set but it was not (checked up to 8s)`);
+    expect(found).to.be.ok;
 
     // Expect either the ACTIVE or INACTIVE background keys defined in extension; check that it's a hex color string
-    assert.match(found, /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/, 'statusBar.background is not a hex color');
+    expect(found).to.match(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/);
   });
 });

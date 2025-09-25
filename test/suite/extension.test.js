@@ -1,4 +1,4 @@
-const assert = require('assert');
+const { expect } = require('chai');
 const vscode = require('vscode');
 
 describe('Extension Tests', function() {
@@ -7,8 +7,8 @@ describe('Extension Tests', function() {
   it('activates without error', async () => {
     // look for the new id first, fall back to the old id for compatibility
     const ext = vscode.extensions.getExtension('local.rivershade') || vscode.extensions.getExtension('local.vscode-focus-color-toggle');
-    assert.ok(ext, 'Extension not found');
+    expect(ext).to.exist;
     await ext.activate();
-    assert.ok(ext.isActive, 'Extension failed to activate');
+    expect(ext.isActive).to.be.true;
   });
 });

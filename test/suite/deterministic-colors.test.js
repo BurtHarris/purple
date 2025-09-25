@@ -1,4 +1,4 @@
-const assert = require('assert');
+const { expect } = require('chai');
 const vscode = require('vscode');
 
 describe('Deterministic color values', function() {
@@ -6,9 +6,9 @@ describe('Deterministic color values', function() {
 
   it('applies exact active and inactive status bar backgrounds', async () => {
     const ext = vscode.extensions.getExtension('local.rivershade') || vscode.extensions.getExtension('local.vscode-focus-color-toggle');
-    assert.ok(ext, 'Extension not found');
+    expect(ext).to.exist;
     await ext.activate();
-    assert.ok(ext.isActive, 'Extension did not activate');
+    expect(ext.isActive).to.be.true;
 
     // First ensure we're in a known state: run toggle to flip
     await vscode.commands.executeCommand('focusColorToggle.toggle');
@@ -30,9 +30,8 @@ describe('Deterministic color values', function() {
 
     const activeColor = find(current, 'statusBar.background');
     // The extension sets ACTIVE to #49124b and INACTIVE to #0f0f0f
-    assert.ok(activeColor, 'statusBar.background not found in color customizations');
-    // Accept either of the two colors depending on whether last toggle left it active or inactive
+    expect(activeColor).to.exist;
     const valid = ['#49124b', '#0f0f0f'];
-    assert.ok(valid.includes(activeColor.toLowerCase()), `statusBar.background (${activeColor}) not one of expected values: ${valid.join(', ')}`);
+    expect(valid).to.include(activeColor.toLowerCase());
   });
 });

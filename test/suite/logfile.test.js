@@ -1,4 +1,4 @@
-const assert = require('assert');
+const { expect } = require('chai');
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
@@ -8,9 +8,9 @@ describe('Activation logfile', function() {
 
   it('writes activation artifact', async () => {
     const ext = vscode.extensions.getExtension('local.rivershade') || vscode.extensions.getExtension('local.vscode-focus-color-toggle');
-    assert.ok(ext, 'Extension not found');
+    expect(ext).to.exist;
     await ext.activate();
-    assert.ok(ext.isActive, 'Extension did not activate');
+    expect(ext.isActive).to.be.true;
 
     const workspaceRoot = path.resolve(__dirname, '..', '..');
     const logDir = path.join(workspaceRoot, '.vscode-test', 'logs');
@@ -23,17 +23,17 @@ describe('Activation logfile', function() {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    assert.ok(fs.existsSync(logFile), `Activation log not found at ${logFile}`);
+    expect(fs.existsSync(logFile)).to.be.true;
 
     const content = fs.readFileSync(logFile, 'utf8');
     let json = null;
     try {
       json = JSON.parse(content);
     } catch (e) {
-      assert.fail('Activation log is not valid JSON');
+      expect.fail('Activation log is not valid JSON');
     }
 
-    assert.ok(json.activatedAt, 'activatedAt missing in activation log');
-    assert.ok(json.theme, 'theme missing in activation log');
+    expect(json.activatedAt).to.exist;
+    expect(json.theme).to.exist;
   });
 });
