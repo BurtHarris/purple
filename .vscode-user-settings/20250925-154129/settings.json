@@ -1,0 +1,15 @@
+{
+  "chat.agent.maxRequests": 250,
+  "gitlens.ai.model": "vscode",
+  "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+  "workbench.editor.closeOnFileDelete": true,
+  "window.titleBarStyle": "custom",
+  "chat.tools.terminal.autoApprove": {
+    "npm test": {
+      "approve": true,
+      "matchCommandLine": true
+    },
+    "npm view": true,
+    "git rev-parse": true
+  }
+}

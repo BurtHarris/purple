@@ -33,6 +33,8 @@ coverage/
 *.temp
 
 # Local backups and debug logs created by scripts
-.vscode-user-settings/
+## Allow all backup files to be tracked
+# .vscode-user-settings/ and its contents are now tracked
 .vscode-debug-logs/
-scripts/.vscode-user-settings/
+## Allow all backup files in scripts/.vscode-user-settings/ to be tracked
+# scripts/.vscode-user-settings/ and its contents are now tracked
