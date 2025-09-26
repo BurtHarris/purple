@@ -3,15 +3,15 @@
 let outputChannel;
 let activationContext;
 let extensionMode;
-let _suppressAutoApply = false;
 let _warnedAboutTitleBarStyle = false;
 let _operationInProgress = false;
+// Note: window-state handler disabled below; debounce state not required
 // Whether to require a modal confirmation before install/remove actions.
 let requireConfirmation = true;
 // Trace mode: set true to enable writing timestamped trace events to
 // .vscode-test/logs/rivershade-trace.log. Disabled by default to avoid
 // noisy disk writes in normal use. Enable temporarily when reproducing.
-const TRACE_ENABLED = true;
+const TRACE_ENABLED = false;
 
 function traceLog() {
   if (!TRACE_ENABLED) return;
@@ -25,8 +25,8 @@ function traceLog() {
     const parts = Array.prototype.slice.call(arguments).map(x => {
       try { return typeof x === 'string' ? x : JSON.stringify(x); } catch (e) { return String(x); }
     });
-    fs.appendFileSync(logPath, ts + ' ' + parts.join(' ') + '\n', 'utf8');
-    try { if (outputChannel) outputChannel.appendLine('[Trace] ' + ts + ' ' + parts.join(' ')); } catch (e) { /* ignore */ }
+  fs.appendFileSync(logPath, ts + ' ' + parts.join(' ') + '\n', 'utf8');
+  try { if (outputChannel) outputChannel.appendLine('[Trace] ' + parts.join(' ')); } catch (e) { /* ignore */ }
   } catch (e) {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: traceLog failed: ' + (e && e.message)); } catch (e) { /* ignore */ }
   }
@@ -43,10 +43,10 @@ function rsLog(operation, message) {
   try { traceLog(operation, message); } catch (e) { /* ignore */ }
 }
 
-// Central permission helper. Reserves the operation slot and suppresses
-// auto-apply while a modal confirmation is shown. Returns a Promise<boolean>
-// indicating whether the operation is approved. If confirmation is disabled
-// or we're running under Test mode, approval is immediate.
+// Central permission helper. Reserves the operation slot while a modal
+// confirmation is shown. Returns a Promise<boolean> indicating whether the
+// operation is approved. If confirmation is disabled or we're running under
+// Test mode, approval is immediate.
 async function requestPermission(operation, promptText, confirmLabel = 'Yes') {
   try {
     if (_operationInProgress) {
@@ -55,7 +55,6 @@ async function requestPermission(operation, promptText, confirmLabel = 'Yes') {
     }
     // Reserve slot and suppress auto-apply preemptively
     _operationInProgress = true;
-    _suppressAutoApply = true;
     // Auto-approve in Test mode or when confirmation is disabled
     if (!requireConfirmation || extensionMode === vscode.ExtensionMode.Test) {
       rsLog(operation, 'auto-approved (test mode or confirmation disabled)');
@@ -68,7 +67,6 @@ async function requestPermission(operation, promptText, confirmLabel = 'Yes') {
         return true;
       }
       rsLog(operation, 'cancelled by user');
-      _suppressAutoApply = false;
       _operationInProgress = false;
       return false;
     } catch (e) {
@@ -77,7 +75,7 @@ async function requestPermission(operation, promptText, confirmLabel = 'Yes') {
     }
   } catch (e) {
     // On unexpected errors, clear guards and deny permission
-    try { _suppressAutoApply = false; _operationInProgress = false; } catch (e) { /* ignore */ }
+    try { _operationInProgress = false; } catch (e) { /* ignore */ }
     rsLog(operation, 'requestPermission failed: ' + (e && e.message));
     return false;
   }
@@ -139,24 +137,33 @@ function buildColorsSet(_scheme, _settings) {
 async function installBling() {
   try { if (outputChannel) outputChannel.appendLine('RiverShade: Command invoked: rivershade.installBling'); } catch (e) { /* ignore */ }
   if (_operationInProgress) {
-    try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling aborted because another operation is in progress'); } catch (e) { /* ignore */ }
-    return Promise.resolve();
+      try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling: operation already in progress (continuing)'); } catch (e) { /* ignore */ }
   }
   traceLog('installBling invoked');
   rsLog('installBling', 'invoked');
   const ok = await requestPermission('installBling', 'RiverShade: install color customizations?', 'Yes');
   if (!ok) return Promise.resolve();
-  const cfg = vscode.workspace.getConfiguration();
-  const scheme = getColorScheme(cfg);
-  const settings = {
-    toggleTitleBar: true,
-    toggleActivityBar: true,
-    toggleStatusBar: true
-  };
-  const colors = buildColorsSet(scheme, settings);
-  await applyColors(colors);
-  try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling: applied colors'); } catch (e) { /* ignore */ }
-  vscode.window.showInformationMessage('RiverShade: color customizations installed.');
+  // Ensure the permission reserve is always cleared when the install flow
+  // finishes (successfully or with an error). requestPermission sets
+  // _operationInProgress when it shows the modal (or auto-approves). Callers
+  // are responsible for clearing that flag.
+  try {
+    const cfg = vscode.workspace.getConfiguration();
+    const scheme = getColorScheme(cfg);
+    const settings = {
+      toggleTitleBar: true,
+      toggleActivityBar: true,
+      toggleStatusBar: true
+    };
+    const colors = buildColorsSet(scheme, settings);
+    await applyColors(colors);
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling: applied colors'); } catch (e) { /* ignore */ }
+    vscode.window.showInformationMessage('RiverShade: color customizations installed.');
+    } finally {
+    // Clear the guard so future auto-applies or commands can proceed.
+    try { _operationInProgress = false; } catch (e) { /* ignore */ }
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling: _operationInProgress cleared'); } catch (e) { /* ignore */ }
+  }
 }
 
 // Remove all bling customizations set by the extension
@@ -168,8 +175,14 @@ async function removeBling() {
   // operation is active, abort immediately.
   const ok = await requestPermission('removeBling', 'RiverShade: remove all color customizations set by RiverShade?', 'Remove');
   if (!ok) return Promise.resolve(false);
-  const cfg = vscode.workspace.getConfiguration();
-  const scheme = getColorScheme(cfg);
+  // Wrap the synchronous setup logic so any unexpected exceptions don't
+  // leave the operation guards set. requestPermission() set the guards;
+  // ensure we clear them on synchronous failures or early returns below.
+  let cfg;
+  let scheme;
+  try {
+    cfg = vscode.workspace.getConfiguration();
+    scheme = getColorScheme(cfg);
   // We'll remove keys that match our bling prefixes so we catch historical
   // variants (for example titleBar.activeBorder, titleBar.inactiveBackground,
   // activityBar.border, statusBar.foreground, etc.). This is safer than only
@@ -187,8 +200,7 @@ async function removeBling() {
 
   const inspect = cfg.inspect('workbench.colorCustomizations') || {};
 
-  // Suppress auto-apply listeners while we perform removals to avoid re-apply races
-  _suppressAutoApply = true;
+  // Mark operation in progress while we perform removals to avoid re-apply races
 
   for (const t of targets) {
     let currentValue = {};
@@ -242,8 +254,8 @@ async function removeBling() {
 
     if (changed) {
       const valueToSet = Object.keys(clone).length === 0 ? undefined : clone;
-      // Perform the update while _suppressAutoApply is true to prevent
-      // applyColors from seeing the intermediate state and reapplying.
+  // Perform the update while the operation is in progress to prevent
+  // applyColors from seeing the intermediate state and reapplying.
       updates.push(cfg.update('workbench.colorCustomizations', valueToSet, t));
       try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: scheduled remove in target ${t} (inspect source=${inspectSource})`); } catch (e) { /* ignore */ }
     } else {
@@ -285,13 +297,22 @@ async function removeBling() {
   if (updates.length === 0 && folderUpdates.length === 0) {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: no bling to remove in any target'); } catch (e) { /* ignore */ }
     try { vscode.window.showInformationMessage('RiverShade: no bling to remove.'); } catch (e) { /* ignore UI errors */ }
-    _operationInProgress = false;
+    // Clear the operation guard since we're returning early
+    try { _operationInProgress = false; } catch (e) { /* ignore */ }
     return Promise.resolve(false);
   }
 
-  // Suppress auto-apply listeners while we perform removals
-  _suppressAutoApply = true;
-  traceLog('removeBling: suppression enabled, starting removals', { _suppressAutoApply, _operationInProgress });
+  } catch (e) {
+    // Synchronous failure during setup - clear operation guard and rethrow
+    // so callers see the error but we avoid leaving the extension stuck in
+    // 'in-progress'.
+    try { _operationInProgress = false; } catch (ee) { /* ignore */ }
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling setup failed: ' + (e && e.message)); } catch (ee) { /* ignore */ }
+    return Promise.reject(e);
+  }
+
+    // Mark operation as in-progress and start removals
+  traceLog('removeBling: starting removals', { _operationInProgress });
   return Promise.all(updates).then(async () => {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: performed scheduled removes'); } catch (e) { /* ignore */ }
     try { await Promise.all(folderUpdates); } catch (e) { /* ignore */ }
@@ -351,7 +372,6 @@ async function removeBling() {
         if (remainingScopes.length === 0) {
           traceLog('removeBling: verification succeeded, no remaining keys', { elapsed: Date.now() - start });
           try { if (outputChannel) outputChannel.appendLine('RiverShade: post-remove: no remaining keys found in inspect'); } catch (e) { /* ignore */ }
-          _suppressAutoApply = false;
           _operationInProgress = false;
           try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: _operationInProgress cleared'); } catch (e) { /* ignore */ }
           return true;
@@ -361,14 +381,13 @@ async function removeBling() {
         if (Date.now() - start > RETRY_MAX_MS) {
           traceLog('removeBling: verification timed out, remaining scopes', remainingScopes);
           try { if (outputChannel) outputChannel.appendLine('RiverShade: post-remove: scopes still containing keys: ' + remainingScopes.join(', ')); } catch (e) { /* ignore */ }
-          _suppressAutoApply = false;
           _operationInProgress = false;
           try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: _operationInProgress cleared (timeout)'); } catch (e) { /* ignore */ }
           return false;
         }
 
         // Attempt to clear remaining scopes again: try workspace/global updates and folder clears
-        traceLog('removeBling: retrying clears for remaining scopes', remainingScopes);
+          traceLog('removeBling: retrying clears for remaining scopes', remainingScopes);
         const retryUpdates = [];
         try {
           // Rebuild an empty value for global/workspace levels
@@ -395,7 +414,6 @@ async function removeBling() {
         return checkAndRetry();
       } catch (e) {
         traceLog('removeBling: verification loop error', e && e.message);
-        _suppressAutoApply = false;
         _operationInProgress = false;
         try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: verification failed: ' + (e && e.message)); } catch (e) { /* ignore */ }
         return false;
@@ -406,9 +424,8 @@ async function removeBling() {
   }).catch(err => {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
     try { vscode.window.showErrorMessage('RiverShade: failed to remove bling'); } catch (e) { /* ignore UI errors */ }
-    _suppressAutoApply = false;
     _operationInProgress = false;
-    traceLog('removeBling: failed, cleared guards', { err: (err && err.message), _suppressAutoApply, _operationInProgress });
+    traceLog('removeBling: failed, cleared guards', { err: (err && err.message), _operationInProgress });
     return Promise.reject(err);
   });
     // end removeBling
@@ -546,7 +563,6 @@ function activate(context) {
         activated: new Date().toISOString(),
         settings: (() => { try { return vscode.workspace.getConfiguration(); } catch (e) { return null; } })(),
         runtime: {
-          _suppressAutoApply: Boolean(_suppressAutoApply),
           _operationInProgress: Boolean(_operationInProgress)
         }
       };
@@ -655,17 +671,9 @@ function activate(context) {
     return out;
   }
 
-  // Apply colors to configured targets. Honor _suppressAutoApply to avoid races.
+  // Apply colors to configured targets. Serializes using _operationInProgress
   function applyColors(colors) {
-    if (_operationInProgress) {
-      try { if (outputChannel) outputChannel.appendLine('RiverShade: applyColors skipped because an operation is in progress'); } catch (e) { /* ignore */ }
-      return Promise.resolve();
-    }
-    traceLog('applyColors invoked', { _suppressAutoApply, _operationInProgress, colors });
-    if (_suppressAutoApply) {
-      try { if (outputChannel) outputChannel.appendLine('RiverShade: applyColors suppressed by _suppressAutoApply'); } catch (e) { /* ignore */ }
-      return Promise.resolve();
-    }
+    traceLog('applyColors invoked', { _operationInProgress, colors });
     const cfgLocal = vscode.workspace.getConfiguration();
     const current = cfgLocal.get('workbench.colorCustomizations') || {};
     // Merge into the general colorCustomizations
@@ -770,21 +778,28 @@ function activate(context) {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: Skipping initial auto-apply in Development mode'); } catch (e) { /* ignore */ }
   }
 
-  const sub = vscode.window.onDidChangeWindowState(_st => {
-    if (!settings.enabled) return;
-  const scheme = getColorScheme(cfg);
-    traceLog('onDidChangeWindowState triggered');
-    applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
-  });
-  context.subscriptions.push(sub);
+  // Historically we listened for window state changes to reapply colors when
+  // the window regained focus. That behavior caused reapply loops in some
+  // environments; we no longer auto-apply on window state changes and have
+  // removed the subscription.
 
   // Reapply when the active color theme changes so the theme-specific block is updated
   if (vscode.window.onDidChangeActiveColorTheme) {
     const themeSub = vscode.window.onDidChangeActiveColorTheme(() => {
       if (!settings.enabled) return;
-  const scheme = getColorScheme(cfg);
-    traceLog('onDidChangeActiveColorTheme triggered');
-    applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
+      if (_operationInProgress) {
+          traceLog('onDidChangeActiveColorTheme suppressed', { _operationInProgress });
+          return;
+        }
+      traceLog('onDidChangeActiveColorTheme triggered');
+      const schedule = () => {
+        try {
+          const scheme = getColorScheme(cfg);
+          applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
+        } catch (e) { traceLog('onDidChangeActiveColorTheme handler error', e && e.message); }
+      };
+      if (_applyDebounceTimer) clearTimeout(_applyDebounceTimer);
+      _applyDebounceTimer = setTimeout(schedule, APPLY_DEBOUNCE_MS);
     });
     context.subscriptions.push(themeSub);
   }
@@ -796,8 +811,7 @@ function activate(context) {
       return;
     }
     if (_operationInProgress) {
-      try { if (outputChannel) outputChannel.appendLine('RiverShade: focusColorToggle.toggle aborted because another operation is in progress'); } catch (e) { /* ignore */ }
-      return;
+      try { if (outputChannel) outputChannel.appendLine('RiverShade: focusColorToggle.toggle: operation already in progress (continuing)'); } catch (e) { /* ignore */ }
     }
     try {
   const scheme = getColorScheme(cfg);
@@ -822,8 +836,7 @@ function activate(context) {
       return;
     }
     if (_operationInProgress) {
-      try { if (outputChannel) outputChannel.appendLine('RiverShade: rivershade.toggle aborted because another operation is in progress'); } catch (e) { /* ignore */ }
-      return;
+      try { if (outputChannel) outputChannel.appendLine('RiverShade: rivershade.toggle: operation already in progress (continuing)'); } catch (e) { /* ignore */ }
     }
     try {
   const scheme = getColorScheme(cfg);

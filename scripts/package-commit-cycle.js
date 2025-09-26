@@ -16,7 +16,7 @@ function safe(cmd) {
 
 // 1) Pre-package commit (best-effort)
 safe('git add -A');
-safe('git commit -m "chore(pre-package): snapshot before packaging"');
+safe('git commit -m "chore(pre-package): snapshot before version bump"');
 
 // 2) Bump patch version
 if (!safe('npm run bump-patch')) process.exitCode = 1;
