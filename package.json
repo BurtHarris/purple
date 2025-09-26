@@ -2,7 +2,7 @@
   "name": "rivershade",
   "displayName": "RiverShade — Focus Color Toggle",
   "publisher": "local",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "engines": {
     "vscode": "^1.75.0"
   },
