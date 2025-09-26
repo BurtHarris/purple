@@ -21,9 +21,13 @@ async function removeBling() {
   const scheme = getColorScheme(cfg);
   const keysToRemove = Object.keys(scheme);
 
-  // Determine targets based on the updateTarget setting (global/workspace/both)
+  // Determine targets. For removal we will aggressively clear both Global and Workspace
+  // regardless of the user's updateTarget preference so that leftover customizations
+  // don't remain in some scopes. We still log the configured preference for clarity.
   const updateTargetSetting = vscode.workspace.getConfiguration().get('focusColorToggle.updateTarget', 'global');
-  const targets = mapUpdateTargetToConfigTargets(updateTargetSetting);
+  const configuredTargets = mapUpdateTargetToConfigTargets(updateTargetSetting);
+  // Force targets for removal: try Global and Workspace always
+  const targets = [vscode.ConfigurationTarget.Global, vscode.ConfigurationTarget.Workspace];
 
   const updates = [];
   let anyRemoved = false;
@@ -32,15 +36,29 @@ async function removeBling() {
   const inspect = cfg.inspect('workbench.colorCustomizations') || {};
 
   for (const t of targets) {
-    // pick the correct per-target value from inspect
+    // pick the correct per-target value from inspect; include extra inspect slots
     let currentValue;
-    if (t === vscode.ConfigurationTarget.Global) currentValue = inspect.globalValue;
-    else if (t === vscode.ConfigurationTarget.Workspace) currentValue = inspect.workspaceValue;
-    else currentValue = inspect.globalValue || inspect.workspaceValue || {};
+    let inspectSource = null;
+    if (t === vscode.ConfigurationTarget.Global) {
+      if (inspect.globalValue && Object.keys(inspect.globalValue).length) { currentValue = inspect.globalValue; inspectSource = 'globalValue'; }
+      else if (inspect.globalLocalValue && Object.keys(inspect.globalLocalValue).length) { currentValue = inspect.globalLocalValue; inspectSource = 'globalLocalValue'; }
+      else { currentValue = inspect.globalValue || inspect.globalLocalValue || {}; }
+    } else if (t === vscode.ConfigurationTarget.Workspace) {
+      if (inspect.workspaceValue && Object.keys(inspect.workspaceValue).length) { currentValue = inspect.workspaceValue; inspectSource = 'workspaceValue'; }
+      else if (inspect.workspaceFolderValue && Object.keys(inspect.workspaceFolderValue).length) { currentValue = inspect.workspaceFolderValue; inspectSource = 'workspaceFolderValue'; }
+      else { currentValue = inspect.workspaceValue || inspect.workspaceFolderValue || {}; }
+    } else {
+      // both: prefer global then workspace
+      if (inspect.globalValue && Object.keys(inspect.globalValue).length) { currentValue = inspect.globalValue; inspectSource = 'globalValue'; }
+      else if (inspect.globalLocalValue && Object.keys(inspect.globalLocalValue).length) { currentValue = inspect.globalLocalValue; inspectSource = 'globalLocalValue'; }
+      else if (inspect.workspaceValue && Object.keys(inspect.workspaceValue).length) { currentValue = inspect.workspaceValue; inspectSource = 'workspaceValue'; }
+      else if (inspect.workspaceFolderValue && Object.keys(inspect.workspaceFolderValue).length) { currentValue = inspect.workspaceFolderValue; inspectSource = 'workspaceFolderValue'; }
+      else { currentValue = inspect.globalValue || inspect.workspaceValue || inspect.globalLocalValue || inspect.workspaceFolderValue || {}; }
+    }
 
     if (!currentValue || Object.keys(currentValue).length === 0) {
       // nothing set at this scope
-      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: nothing in target ${t}`); } catch (e) { /* ignore */ }
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: nothing in target ${t} (inspect source=${inspectSource || '<none>'})`); } catch (e) { /* ignore */ }
       continue;
     }
 
@@ -77,11 +95,33 @@ async function removeBling() {
       // if clone is empty, pass undefined to remove the setting at that scope
       const valueToSet = Object.keys(clone).length === 0 ? undefined : clone;
       updates.push(cfg.update('workbench.colorCustomizations', valueToSet, t));
-      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: scheduled remove in target ${t}`); } catch (e) { /* ignore */ }
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: scheduled remove in target ${t} (inspect source=${inspectSource || '<none>'})`); } catch (e) { /* ignore */ }
     } else {
-      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: no bling found in target ${t}`); } catch (e) { /* ignore */ }
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: no bling found in target ${t} (inspect source=${inspectSource || '<none>'})`); } catch (e) { /* ignore */ }
     }
   }
+
+  // Additionally attempt to clear per-workspace-folder settings where present. Some
+  // users may have folder-scoped colorCustomizations; clear those explicitly.
+  const folderUpdates = [];
+  try {
+    const folders = vscode.workspace.workspaceFolders || [];
+    for (const f of folders) {
+      try {
+        const folderCfg = vscode.workspace.getConfiguration(undefined, f.uri);
+        // For folder-scoped configs, it's safest to set undefined which removes the key
+        // at that folder scope. We also log what we attempted.
+        folderUpdates.push(folderCfg.update('workbench.colorCustomizations', undefined, vscode.ConfigurationTarget.WorkspaceFolder)
+          .then(() => {
+            try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: cleared workbench.colorCustomizations for workspaceFolder=${f.name}`); } catch (e) { /* ignore */ }
+          }).catch(err => {
+            try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: failed to clear workspaceFolder=${f.name}: ${err && err.message}`); } catch (e) { /* ignore */ }
+          }));
+      } catch (e) {
+        try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: error preparing folder update for ${f && f.name}: ${e && e.message}`); } catch (e) { /* ignore */ }
+      }
+    }
+  } catch (e) { /* ignore workspaceFolders enumeration errors */ }
 
   if (updates.length === 0) {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: no bling to remove in any target'); } catch (e) { /* ignore */ }
@@ -92,6 +132,22 @@ async function removeBling() {
   return Promise.all(updates).then(() => {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: removed bling in configured targets'); } catch (e) { /* ignore */ }
     try { vscode.window.showInformationMessage('RiverShade: bling removed.'); } catch (e) { /* ignore UI errors */ }
+    // Restore previous titleBarStyle if we changed it during applyColors
+    try {
+      if (activationContext && activationContext.globalState) {
+        const prev = activationContext.globalState.get('rivershade.prevTitleBarStyle');
+        if (typeof prev === 'string') {
+          try {
+            vscode.workspace.getConfiguration().update('window.titleBarStyle', prev, vscode.ConfigurationTarget.Global);
+            try { if (outputChannel) outputChannel.appendLine('RiverShade: restored previous window.titleBarStyle=' + prev); } catch (e) { /* ignore */ }
+          } catch (e) {
+            try { if (outputChannel) outputChannel.appendLine('RiverShade: failed to restore previous titleBarStyle: ' + (e && e.message)); } catch (e) { /* ignore */ }
+          }
+          // clear saved value
+          try { activationContext.globalState.update('rivershade.prevTitleBarStyle', undefined); } catch (e) { /* ignore */ }
+        }
+      }
+    } catch (e) { /* ignore restore errors */ }
     return true;
   }).catch(err => {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
@@ -105,6 +161,7 @@ const vscode = require('vscode');
 let outputChannel = null;
 let extensionMode = null;
 let _warnedAboutTitleBarStyle = false;
+let activationContext = null; // stored from activate(context) to persist small state like prevTitleBarStyle
 
 
 
@@ -208,6 +265,12 @@ function applyColors(colors) {
       if (titleBarStyle !== 'custom') {
         // Auto-set the title bar style to custom so the title bar recolors as expected.
         try {
+          // Persist the previous value so removeBling can restore it later.
+          try {
+            if (activationContext && activationContext.globalState) {
+              activationContext.globalState.update('rivershade.prevTitleBarStyle', titleBarStyle);
+            }
+          } catch (e) { /* ignore persistence errors */ }
           // update at global (user) level to affect the native window
           vscode.workspace.getConfiguration().update('window.titleBarStyle', 'custom', vscode.ConfigurationTarget.Global);
         } catch (e) {
@@ -225,7 +288,48 @@ function applyColors(colors) {
 
   // Apply to each target (usually just one). Return a Promise that resolves when all updates complete.
   const updates = targets.map(t => cfg.update('workbench.colorCustomizations', merged, t));
-  return Promise.all(updates);
+  return Promise.all(updates).then(() => {
+    // Post-write verification: inspect the stored colorCustomizations for each target
+    try {
+      for (const t of targets) {
+        const ins = cfg.inspect('workbench.colorCustomizations') || {};
+        // pick value from inspect matching the target
+        let persisted = null;
+        if (t === vscode.ConfigurationTarget.Global) persisted = ins.globalValue || ins.globalLocalValue || {};
+        else if (t === vscode.ConfigurationTarget.Workspace) persisted = ins.workspaceValue || ins.workspaceFolderValue || {};
+        else persisted = ins.globalValue || ins.workspaceValue || {};
+
+        // Compare requested merged vs persisted to find keys that were ignored
+        const requestedKeys = new Set(Object.keys(merged));
+        const persistedKeys = new Set(Object.keys(persisted || {}));
+        // include theme-specific keys
+        for (const k of Object.keys(merged)) {
+          if (k.startsWith('[') && typeof merged[k] === 'object') {
+            const block = merged[k] || {};
+            for (const kk of Object.keys(block)) requestedKeys.add(kk);
+          }
+        }
+        for (const k of Object.keys(persisted || {})) {
+          if (k.startsWith('[') && typeof persisted[k] === 'object') {
+            const block = persisted[k] || {};
+            for (const kk of Object.keys(block)) persistedKeys.add(kk);
+          }
+        }
+        const missing = [];
+        for (const rk of requestedKeys) {
+          if (!persistedKeys.has(rk)) missing.push(rk);
+        }
+        if (missing.length) {
+          try { if (outputChannel) outputChannel.appendLine(`RiverShade: applyColors: keys requested but not persisted for target ${t}: ${missing.join(', ')}`); } catch (e) { /* ignore */ }
+        } else {
+          try { if (outputChannel) outputChannel.appendLine(`RiverShade: applyColors: all requested keys persisted for target ${t}`); } catch (e) { /* ignore */ }
+        }
+      }
+    } catch (e) {
+      try { if (outputChannel) outputChannel.appendLine('RiverShade: post-write verification failed: ' + (e && e.message)); } catch (e) { /* ignore */ }
+    }
+    return Promise.resolve();
+  });
 }
 
 function mapUpdateTargetToConfigTargets(setting) {
@@ -253,10 +357,11 @@ function getActiveThemeName() {
 }
 
 function activate(context) {
-  console.log('RiverShade: activate() entry');
-  // create an output channel early so any activation logs are captured
+  // persist the activation context so helper functions can read/write small flags
+  activationContext = context;
+  // create the RiverShade output channel immediately so all activation logs go there
   outputChannel = vscode.window.createOutputChannel('RiverShade');
-  try { outputChannel.appendLine('RiverShade: activate() start'); } catch (e) { /* ignore */ }
+  try { outputChannel.appendLine('RiverShade: activate() entry'); } catch (e) { /* ignore */ }
 
   // record extension mode early so dev-only behavior can be gated
   extensionMode = context.extensionMode;
@@ -367,9 +472,7 @@ function activate(context) {
       return Promise.reject(e);
     }
   }));
-  // create an output channel for debugging in the Extension Host
-  outputChannel = vscode.window.createOutputChannel('RiverShade');
-  extensionMode = context.extensionMode;
+  // output channel already created above; log activation summary
   outputChannel.appendLine(`RiverShade extension: activate() called (mode=${extensionMode})`);
   try { if (outputChannel) outputChannel.appendLine('RiverShade: Activation: commands registered and outputChannel created'); } catch (e) { /* ignore */ }
   try {
@@ -427,13 +530,19 @@ function activate(context) {
     }
   }
 
-  if (settings.enabled) {
-  const scheme = getColorScheme(cfg);
-  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
+  // Avoid auto-applying colors when running in Development mode because the
+  // dev extension host often runs against the user's real settings.json and
+  // can accidentally persist changes while the developer is iterating.
+  // We still auto-apply when running under Test or Production modes.
+  if (settings.enabled && extensionMode !== vscode.ExtensionMode.Development) {
+    const scheme = getColorScheme(cfg);
+    applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
       .catch(err => {
-    try { if (outputChannel) outputChannel.appendLine('RiverShade: Initial applyColorsAndMaybeReload failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+        try { if (outputChannel) outputChannel.appendLine('RiverShade: Initial applyColorsAndMaybeReload failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
         console.error('Initial applyColorsAndMaybeReload failed', err);
       });
+  } else if (extensionMode === vscode.ExtensionMode.Development) {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: Skipping initial auto-apply in Development mode'); } catch (e) { /* ignore */ }
   }
 
   const sub = vscode.window.onDidChangeWindowState(_st => {

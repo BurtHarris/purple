@@ -2,6 +2,10 @@
   "name": "rivershade",
   "displayName": "RiverShade — Focus Color Toggle",
   "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BurtHarris/purple.git"
+  },
   "version": "0.1.10",
   "engines": {
     "vscode": "^1.75.0"
@@ -14,9 +18,10 @@
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
-    "mocha": "^11.7.2",
+    "@vscode/vsce": "^3.6.1",
     "chai": "^4.3.7",
-    "eslint": "^8.48.0"
+    "eslint": "^8.48.0",
+    "mocha": "^11.7.2"
   },
   "activationEvents": [
     "onCommand:focusColorToggle.toggle",

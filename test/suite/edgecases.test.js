@@ -39,14 +39,42 @@ describe('Edge cases', function() {
     const key = 'workbench.colorCustomizations';
     const before = config.get(key);
 
+    // Fire toggles rapidly and await each to ensure handler returns its promise.
     for (let i = 0; i < 10; i++) {
       await vscode.commands.executeCommand('focusColorToggle.toggle');
     }
 
-    const current = config.get(key) || {};
-    const found = await findStatusBarBackground(current);
-    expect(found).to.be.ok;
-    expect(found).to.match(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/);
+    // Sometimes writes take a short moment in the extension host; retry inspect() a few times
+    // and log enough information to diagnose where the value was written (global/workspace).
+    let found = null;
+    let lastInspect = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const inspect = vscode.workspace.getConfiguration().inspect(key) || {};
+      lastInspect = inspect;
+
+      // check scoped values explicitly so we don't depend on the merged view which
+      // may be subject to timing in the test environment
+      const candidates = [inspect.workspaceValue, inspect.globalLocalValue, inspect.globalValue, inspect.defaultValue];
+      for (const c of candidates) {
+        found = await findStatusBarBackground(c);
+        if (found) break;
+      }
+      if (found) break;
+
+      // small delay before retrying
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    // attach inspect info to assertion errors to aid debugging
+    try {
+      expect(found, `statusBar.background not found. inspect(): ${JSON.stringify(lastInspect)}`).to.be.ok;
+      expect(found).to.match(/^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/);
+    } catch (err) {
+      // rethrow after logging to stdout (test harness captures stdout)
+      // eslint-disable-next-line no-console
+      console.error('Edge test failure - last inspect:', JSON.stringify(lastInspect, null, 2));
+      throw err;
+    }
 
     await config.update(key, before, vscode.ConfigurationTarget.Global);
   });

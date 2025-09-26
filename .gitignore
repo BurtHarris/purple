@@ -38,3 +38,7 @@ coverage/
 .vscode-debug-logs/
 ## Allow all backup files in scripts/.vscode-user-settings/ to be tracked
 # scripts/.vscode-user-settings/ and its contents are now tracked
+
+# ignore vsix files
+*.vsix
+
