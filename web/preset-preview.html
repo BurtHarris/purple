@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Palette Preview — Fluent Purple</title>
+  <style>
+    :root{
+      --themePrimary: #7A4CCF;
+      --themeSecondary: #5B2FA6;
+      --themeTertiary: #9B63E6;
+      --white: #FFFFFF;
+      --black: #000000;
+      --neutralPrimary: #E6E1F1;
+      --neutralSecondary: #CFC6E6;
+      --neutralTertiary: #A99FC6;
+      --neutralLight: #2B2330;
+      --neutralLighter: #34283A;
+      --neutralQuaternaryAlt: #3C3244;
+
+      --shadow: rgba(0,0,0,0.45);
+      --radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    body{ margin: 0; background: #111111; color: var(--neutralPrimary); }
+    .frame{ width: 100%; height: 100vh; display: grid; grid-template-rows: auto 1fr 32px; }
+
+    /* Title bar */
+    .titlebar{ display:flex; align-items:center; padding:8px 12px; gap:12px; background:var(--themePrimary); color:var(--neutralPrimary); }
+    .titlebar.inactive{ background:var(--neutralLighter); color:var(--neutralSecondary); }
+    .titlebar .title{ font-weight:600; }
+    .titlebar .controls{ margin-left:auto; display:flex; gap:8px; }
+    .titlebar .btn{ width:14px; height:14px; border-radius:2px; background:rgba(255,255,255,0.12); display:inline-block; }
+
+    /* layout */
+    .content{ display:flex; gap:12px; padding:12px; }
+  .activity{ width:56px; background:var(--themeSecondary); color:var(--neutralPrimary); padding:12px; border-radius:var(--radius); flex: 0 0 auto; }
+  .sidebar{ width:220px; background:var(--neutralLight); color:var(--neutralPrimary); padding:12px; border-radius:var(--radius); flex: 0 0 auto; }
+  .editor{ flex:1 1 auto; display:flex; gap:12px; }
+  .editor-pane{ flex:1; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06)); border-radius:var(--radius); padding:16px; min-width:120px; }
+
+  /* Resizers */
+  .resizer{ width:10px; cursor:col-resize; background:transparent; position:relative; }
+  .resizer:before{ content:''; position:absolute; left:50%; top:8px; transform:translateX(-50%); width:2px; height:calc(100% - 16px); background:rgba(255,255,255,0.06); border-radius:2px; }
+  .resizer.handle-active:before{ background:rgba(255,255,255,0.15); }
+
+    .status{ display:flex; align-items:center; padding:6px 12px; gap:12px; background:var(--neutralQuaternaryAlt); color:var(--neutralPrimary); }
+
+    .card{ background: rgba(255,255,255,0.02); padding:12px; border-radius:6px; margin-bottom:8px; }
+
+    .controls-row{ display:flex; gap:8px; align-items:center; }
+    .toggle{ padding:6px 10px; border-radius:6px; background:rgba(255,255,255,0.03); cursor:pointer; }
+    button.copy{ padding:8px 12px; background:var(--themeTertiary); color:var(--white); border:0; border-radius:6px; cursor:pointer; }
+
+    .swatches{ display:flex; gap:6px; margin-top:8px; }
+    .swatch{ width:56px; height:56px; border-radius:6px; box-shadow: 0 4px 10px var(--shadow); }
+    .legend{ font-size:12px; color:var(--neutralSecondary); margin-top:6px; }
+
+    pre.json{ background:#0b0b0b; padding:12px; border-radius:6px; color:#ddd; overflow:auto; max-height:200px; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <div id="titlebar" class="titlebar">
+      <div class="btn" aria-hidden></div>
+      <div class="title">Fluent Purple — Preview</div>
+      <div class="controls">
+        <div class="legend">Active</div>
+      </div>
+    </div>
+
+    <div class="content">
+    <div id="activity" class="activity">
+        <div style="font-weight:700;margin-bottom:6px">Activity</div>
+        <div class="card">Explorer</div>
+        <div class="card">Search</div>
+        <div class="card">Source</div>
+      </div>
+
+  <div id="sidebar" class="sidebar">
+        <div style="font-weight:700;margin-bottom:8px">Side Bar</div>
+        <div class="card">Files</div>
+        <div class="card">Outline</div>
+      </div>
+
+      <div class="resizer" id="res-activity-sidebar" title="drag to resize"></div>
+
+      <div id="main-area" style="display:flex;flex:1;gap:12px;">
+        <div id="sidebar-wrap" style="display:flex;flex-direction:column;">
+          <div id="sidebar" class="sidebar">
+            <div style="font-weight:700;margin-bottom:8px">Side Bar</div>
+            <div class="card">Files</div>
+            <div class="card">Outline</div>
+          </div>
+        </div>
+
+        <div class="resizer" id="res-sidebar-editor" title="drag to resize"></div>
+
+        <div class="editor" id="editor-area">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-weight:700">Editor area</div>
+          <div class="controls-row">
+            <div id="stateToggle" class="toggle">Toggle Active</div>
+            <button id="copyJson" class="copy">Copy JSON</button>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="swatches">
+            <div class="swatch" style="background:var(--themePrimary)"></div>
+            <div class="swatch" style="background:var(--themeSecondary)"></div>
+            <div class="swatch" style="background:var(--themeTertiary)"></div>
+            <div class="swatch" style="background:var(--neutralPrimary)"></div>
+            <div class="swatch" style="background:var(--neutralLight)"></div>
+          </div>
+          <div class="legend">Primary / Secondary / Tertiary / Foreground / Surface</div>
+        </div>
+
+        <div style="margin-top:12px; display:flex; gap:12px;">
+          <div class="editor-pane">Left editor pane
+            <div class="card" style="margin-top:8px">File A</div>
+          </div>
+          <div class="resizer" id="res-editor-split" title="drag to resize editor split"></div>
+          <div class="editor-pane">Right editor pane
+            <div class="card" style="margin-top:8px">File B</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px">
+          <pre id="jsonOut" class="json"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="status">Status: <span style="font-weight:700;margin-left:8px">Ready</span></div>
+  </div>
+
+  <script>
+    const PRESET = {
+      themePrimary: getComputedStyle(document.documentElement).getPropertyValue('--themePrimary').trim(),
+      themeSecondary: getComputedStyle(document.documentElement).getPropertyValue('--themeSecondary').trim(),
+      themeTertiary: getComputedStyle(document.documentElement).getPropertyValue('--themeTertiary').trim(),
+      white: getComputedStyle(document.documentElement).getPropertyValue('--white').trim(),
+      black: getComputedStyle(document.documentElement).getPropertyValue('--black').trim(),
+      neutralPrimary: getComputedStyle(document.documentElement).getPropertyValue('--neutralPrimary').trim(),
+      neutralSecondary: getComputedStyle(document.documentElement).getPropertyValue('--neutralSecondary').trim(),
+      neutralTertiary: getComputedStyle(document.documentElement).getPropertyValue('--neutralTertiary').trim(),
+      neutralLight: getComputedStyle(document.documentElement).getPropertyValue('--neutralLight').trim(),
+      neutralLighter: getComputedStyle(document.documentElement).getPropertyValue('--neutralLighter').trim(),
+      neutralQuaternaryAlt: getComputedStyle(document.documentElement).getPropertyValue('--neutralQuaternaryAlt').trim()
+    };
+
+    function mapPresetToColors(p) {
+      return {
+        'titleBar.activeBackground': p.themePrimary,
+        'titleBar.activeForeground': p.neutralPrimary,
+        'titleBar.inactiveBackground': p.neutralLighter,
+        'titleBar.inactiveForeground': p.neutralSecondary,
+        'quickInputTitle.background': p.themePrimary,
+        'quickInputTitle.foreground': p.neutralPrimary,
+        'peekViewTitle.background': p.themePrimary,
+        'peekViewTitleLabel.foreground': p.neutralPrimary,
+        'editorWidget.background': p.themePrimary,
+        'editorWidget.inactiveBackground': p.neutralLighter,
+        'activityBar.background': p.themeSecondary,
+        'activityBar.foreground': p.neutralPrimary,
+        'statusBar.background': p.neutralQuaternaryAlt,
+        'statusBar.noFolderBackground': p.neutralLighter,
+        'rivershade.baseColor': p.themePrimary,
+        'rivershade.darkVariant': p.themeSecondary,
+        'rivershade.lightVariant': p.themeTertiary,
+        'statusBar.border': p.themeSecondary,
+        'titleBar.border': p.themeSecondary,
+        'activityBar.border': p.themeSecondary,
+        'panel.border': p.themeSecondary,
+        'sideBar.border': p.themeSecondary,
+        'editorGroup.border': p.themeSecondary,
+        'sash.hoverBorder': p.themeTertiary,
+        'sideBar.dropBackground': p.themeTertiary,
+        'list.dropBackground': p.themeTertiary,
+        'panel.dropBorder': p.themeTertiary,
+        'activityBar.dropBorder': p.themeTertiary
+      };
+    }
+
+    const jsonOut = document.getElementById('jsonOut');
+    const primaryPicker = document.createElement('input');
+    primaryPicker.type = 'color';
+    primaryPicker.id = 'primaryPicker';
+    primaryPicker.value = PRESET.themePrimary;
+
+    const secondaryPicker = document.createElement('input');
+    secondaryPicker.type = 'color';
+    secondaryPicker.id = 'secondaryPicker';
+    secondaryPicker.value = PRESET.themeSecondary;
+
+    const tertiaryPicker = document.createElement('input');
+    tertiaryPicker.type = 'color';
+    tertiaryPicker.id = 'tertiaryPicker';
+    tertiaryPicker.value = PRESET.themeTertiary;
+
+    // Insert pickers into controls row near the toggle button
+    const controlsRow = document.querySelector('.controls-row');
+    controlsRow.insertBefore(primaryPicker, controlsRow.children[0]);
+    controlsRow.insertBefore(secondaryPicker, controlsRow.children[1]);
+    controlsRow.insertBefore(tertiaryPicker, controlsRow.children[2]);
+
+    // load Color.js (colorjs.io) for OKLCH-based perceptual ops
+    (function loadColorJs() {
+      const s = document.createElement('script');
+      s.type = 'module';
+      s.src = 'https://cdn.jsdelivr.net/npm/colorjs.io@0.5.2/dist/color.min.js';
+      s.onload = () => { /* ready */ };
+      document.head.appendChild(s);
+    })();
+
+    // Recalculate derived tokens fluidly based on primary (and optionally secondary/tertiary)
+    async function recalcFromPrimary(hexPrimary, hexSecondary, hexTertiary) {
+      // Try to use Color.js if it's available as a global Module (window.Color)
+      let ColorLib = window.Color;
+      // If not available, attempt to import the module (some browsers/servers may allow dynamic import)
+      if (!ColorLib) {
+        try {
+          ColorLib = await import('https://cdn.jsdelivr.net/npm/colorjs.io@0.5.2/dist/color.min.js');
+          ColorLib = ColorLib && ColorLib.default ? ColorLib.default : ColorLib;
+        } catch (e) {
+          ColorLib = null;
+        }
+      }
+
+      let neutralPrimary, neutralSecondary, neutralTertiary;
+      let neutralLight, neutralLighter, neutralQuaternaryAlt;
+
+      if (ColorLib) {
+        try {
+          const c = new ColorLib(hexPrimary);
+          // Convert to OKLCH coordinates
+          const ok = c.to('oklch');
+          const [L, C, H] = Array.isArray(ok) ? ok : (ok.coords || [ok.l, ok.c, ok.h]);
+
+          // For dark theme neutrals: increase lightness toward white (L up) and reduce chroma
+          function mkNeutral(deltaL, cMult) {
+            const newL = (L > 2) ? Math.max(0, Math.min(100, L + deltaL)) : Math.max(0, Math.min(1, L + deltaL / 100));
+            const newC = C * cMult;
+            const col = new ColorLib('oklch', [newL, newC, H]);
+            return col.to('srgb').toString({ format: 'hex' });
+          }
+
+          neutralPrimary = mkNeutral(40, 0.25);   // very light foreground
+          neutralSecondary = mkNeutral(30, 0.18);
+          neutralTertiary = mkNeutral(18, 0.12);
+
+          // Surfaces: lower lightness and reduce chroma
+          function mkSurface(deltaL) {
+            const newL = (L > 2) ? Math.max(0, Math.min(100, L - deltaL)) : Math.max(0, Math.min(1, L - deltaL / 100));
+            const col = new ColorLib('oklch', [newL, Math.max(0, C * 0.5), H]);
+            return col.to('srgb').toString({ format: 'hex' });
+          }
+
+          neutralLight = mkSurface(48);
+          neutralLighter = mkSurface(40);
+          neutralQuaternaryAlt = mkSurface(34);
+        } catch (e) {
+          // Fall back to previous values on error
+          neutralPrimary = PRESET.neutralPrimary;
+          neutralSecondary = PRESET.neutralSecondary;
+          neutralTertiary = PRESET.neutralTertiary;
+          neutralLight = PRESET.neutralLight;
+          neutralLighter = PRESET.neutralLighter;
+          neutralQuaternaryAlt = PRESET.neutralQuaternaryAlt;
+        }
+      } else {
+        // Fallback: reuse existing heuristics (simple fallbacks)
+        neutralPrimary = PRESET.neutralPrimary;
+        neutralSecondary = PRESET.neutralSecondary;
+        neutralTertiary = PRESET.neutralTertiary;
+        neutralLight = PRESET.neutralLight;
+        neutralLighter = PRESET.neutralLighter;
+        neutralQuaternaryAlt = PRESET.neutralQuaternaryAlt;
+      }
+
+      // Update PRESET and CSS vars
+      PRESET.themePrimary = hexPrimary;
+      PRESET.themeSecondary = hexSecondary;
+      PRESET.themeTertiary = hexTertiary;
+      PRESET.neutralPrimary = neutralPrimary;
+      PRESET.neutralSecondary = neutralSecondary;
+      PRESET.neutralTertiary = neutralTertiary;
+      PRESET.neutralLight = neutralLight;
+      PRESET.neutralLighter = neutralLighter;
+      PRESET.neutralQuaternaryAlt = neutralQuaternaryAlt;
+
+      const root = document.documentElement.style;
+      root.setProperty('--themePrimary', PRESET.themePrimary);
+      root.setProperty('--themeSecondary', PRESET.themeSecondary);
+      root.setProperty('--themeTertiary', PRESET.themeTertiary);
+      root.setProperty('--neutralPrimary', PRESET.neutralPrimary);
+      root.setProperty('--neutralSecondary', PRESET.neutralSecondary);
+      root.setProperty('--neutralTertiary', PRESET.neutralTertiary);
+      root.setProperty('--neutralLight', PRESET.neutralLight);
+      root.setProperty('--neutralLighter', PRESET.neutralLighter);
+      root.setProperty('--neutralQuaternaryAlt', PRESET.neutralQuaternaryAlt);
+
+      refresh();
+    }
+
+    // Attach handlers
+    primaryPicker.addEventListener('input', (e) => {
+      const v = e.target.value;
+      recalcFromPrimary(v, secondaryPicker.value, tertiaryPicker.value);
+    });
+    secondaryPicker.addEventListener('input', (e) => {
+      const v = e.target.value;
+      recalcFromPrimary(primaryPicker.value, v, tertiaryPicker.value);
+    });
+    tertiaryPicker.addEventListener('input', (e) => {
+      const v = e.target.value;
+      recalcFromPrimary(primaryPicker.value, secondaryPicker.value, v);
+    });
+
+    function refresh() {
+      const mapping = mapPresetToColors(PRESET);
+      jsonOut.textContent = JSON.stringify({ 'workbench.colorCustomizations': mapping }, null, 2);
+    }
+
+    document.getElementById('stateToggle').addEventListener('click', () => {
+      const tb = document.getElementById('titlebar');
+      tb.classList.toggle('inactive');
+      const legend = tb.querySelector('.legend');
+      legend.textContent = tb.classList.contains('inactive') ? 'Inactive' : 'Active';
+      // update status bar colors visually
+      const status = document.getElementById('status');
+      status.style.background = tb.classList.contains('inactive') ? getComputedStyle(document.documentElement).getPropertyValue('--neutralQuaternaryAlt') : getComputedStyle(document.documentElement).getPropertyValue('--neutralQuaternaryAlt');
+    });
+
+    document.getElementById('copyJson').addEventListener('click', async () => {
+      const mapping = mapPresetToColors(PRESET);
+      const text = JSON.stringify({ 'workbench.colorCustomizations': mapping }, null, 2);
+      try { await navigator.clipboard.writeText(text); alert('Copied JSON to clipboard'); } catch (e) { prompt('Copy this JSON', text); }
+    });
+
+    // Attempt to sample VS Code workbench color tokens (if available in the webview)
+    (function trySampleVsCodeTokens() {
+      const keys = [
+        'titleBar.activeBackground',
+        'activityBar.background',
+        'activityBarBadge.background',
+        'button.background',
+        'focusBorder',
+        'list.activeSelectionBackground',
+        'editorWidget.background',
+        'statusBar.background',
+        'sideBar.background'
+      ];
+      const samples = {};
+      let foundAny = false;
+      for (const k of keys) {
+        const id = 'sample_' + k.replace(/\./g, '_');
+        const d = document.createElement('div');
+        d.id = id;
+        d.style.display = 'none';
+        d.style.background = `var(--vscode-${k})`;
+        document.body.appendChild(d);
+        const cs = getComputedStyle(d);
+        const bg = cs.backgroundColor || '';
+        const hex = (bg && bg.indexOf('rgba') === -1 && bg.indexOf('rgb') !== -1) ? (function() {
+          const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (!m) return null; return '#' + [1,2,3].map(i => (+m[i]).toString(16).padStart(2,'0')).join('');
+        })() : null;
+        if (hex) { samples[k] = hex; foundAny = true; }
+      }
+      if (foundAny) {
+        // Map sampled tokens to preset roles
+        const prim = samples['titleBar.activeBackground'] || samples['button.background'] || PRESET.themePrimary;
+        const sec = samples['activityBar.background'] || samples['activityBarBadge.background'] || PRESET.themeSecondary;
+        const ter = samples['activityBarBadge.background'] || samples['button.background'] || PRESET.themeTertiary;
+        // initialize pickers and recalc
+        primaryPicker.value = prim;
+        secondaryPicker.value = sec;
+        tertiaryPicker.value = ter;
+        // recalc using the Color.js path
+        recalcFromPrimary(prim, sec, ter).catch(() => refresh());
+      } else {
+        refresh();
+      }
+    })();
+
+    // Resizer logic
+    function makeResizer(resId, beforeEl, afterEl, options = {}) {
+      const res = document.getElementById(resId);
+      if (!res) return;
+      let dragging = false;
+      let startX = 0;
+      let startBeforeWidth = 0;
+
+      const onDown = (e) => {
+        dragging = true;
+        res.classList.add('handle-active');
+        startX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+        const rect = beforeEl.getBoundingClientRect();
+        startBeforeWidth = rect.width;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onUp);
+      };
+
+      const onMove = (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+        const dx = clientX - startX;
+        const newBefore = Math.max(40, startBeforeWidth + dx);
+        beforeEl.style.width = newBefore + 'px';
+      };
+
+      const onUp = () => {
+        dragging = false;
+        res.classList.remove('handle-active');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+      };
+
+      res.addEventListener('mousedown', onDown);
+      res.addEventListener('touchstart', onDown, { passive: true });
+    }
+
+    // Create resizers: activity <-> sidebar, sidebar <-> editor, editor split left/right
+    (function wireResizers() {
+      const activity = document.getElementById('activity');
+      const sidebarWrap = document.getElementById('sidebar-wrap');
+      const sidebar = document.getElementById('sidebar');
+      const editorArea = document.getElementById('editor-area');
+
+      makeResizer('res-activity-sidebar', activity, sidebar);
+      makeResizer('res-sidebar-editor', sidebarWrap, editorArea);
+
+      // Editor split: left/right panes
+      const resEditorSplit = document.getElementById('res-editor-split');
+      const leftPane = document.querySelector('.editor-pane:first-of-type');
+      const rightPane = document.querySelector('.editor-pane:last-of-type');
+      if (resEditorSplit && leftPane && rightPane) {
+        let dragging = false, startX = 0, startLeftW = 0;
+        const onDown = (e) => {
+          dragging = true; startX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0; startLeftW = leftPane.getBoundingClientRect().width;
+          resEditorSplit.classList.add('handle-active');
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+          document.addEventListener('touchmove', onMove, { passive: false });
+          document.addEventListener('touchend', onUp);
+        };
+        const onMove = (e) => { if (!dragging) return; e.preventDefault(); const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX) || 0; const dx = clientX - startX; const newW = Math.max(120, startLeftW + dx); leftPane.style.flex = '0 0 ' + newW + 'px'; };
+        const onUp = () => { dragging = false; resEditorSplit.classList.remove('handle-active'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.removeEventListener('touchmove', onMove); document.removeEventListener('touchend', onUp); };
+        resEditorSplit.addEventListener('mousedown', onDown); resEditorSplit.addEventListener('touchstart', onDown, { passive: true });
+      }
+    })();
+  </script>
+</body>
+</html>
