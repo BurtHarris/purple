@@ -145,3 +145,19 @@ If you want to change or improve this extension:
 6. Open a pull request with a clear description of your change.
 
 Please review code carefully before using the extension in a shared or production environment.
+
+Developer bump workflow
+-----------------------
+
+When you change contributed commands or other extension entry points you should bump the
+patch version in `package.json` so tests and dev flows remain deterministic. We provide a
+helper npm script for this:
+
+```powershell
+npm run bump-patch
+```
+
+This runs `npm version patch --no-git-tag-version` and updates `package-lock.json`. After
+running it, commit `package.json` and `package-lock.json` to record the new version.
+
+If you want me to bump and commit for you, say "bump and commit" and I'll do it.
