@@ -1,3 +1,52 @@
+// Install purple bling customizations
+async function installBling() {
+  const cfg = vscode.workspace.getConfiguration();
+  const scheme = getColorScheme(cfg);
+  const settings = {
+    toggleTitleBar: true,
+    toggleActivityBar: true,
+    toggleStatusBar: true
+  };
+  const colors = buildColorsSet(scheme, settings);
+  await applyColors(colors);
+  vscode.window.showInformationMessage('RiverShade: color customizations installed.');
+}
+
+// Remove all bling customizations set by the extension
+async function removeBling() {
+  const cfg = vscode.workspace.getConfiguration();
+  const current = cfg.get('workbench.colorCustomizations') || {};
+  // Clone the config object to avoid mutating VS Code proxy
+  const clone = JSON.parse(JSON.stringify(current));
+  const scheme = getColorScheme(cfg);
+  const keysToRemove = Object.keys(scheme);
+  let changed = false;
+  for (const k of keysToRemove) {
+    if (k in clone) {
+      delete clone[k];
+      changed = true;
+    }
+  }
+  // Also remove theme-scoped blocks if present
+  const theme = getActiveThemeName();
+  if (theme) {
+    const themeKey = `[${theme}]`;
+    if (clone[themeKey]) {
+      for (const k of keysToRemove) {
+        if (k in clone[themeKey]) {
+          delete clone[themeKey][k];
+          changed = true;
+        }
+      }
+    }
+  }
+  if (changed) {
+    await cfg.update('workbench.colorCustomizations', clone, vscode.ConfigurationTarget.Global);
+    vscode.window.showInformationMessage('RiverShade: bling removed.');
+  } else {
+    vscode.window.showInformationMessage('RiverShade: no bling to remove.');
+  }
+}
 const vscode = require('vscode');
 
 
@@ -5,42 +54,28 @@ let outputChannel = null;
 let extensionMode = null;
 let _warnedAboutTitleBarStyle = false;
 
+
+
+// Restored purple color scheme (single set, no ACTIVE/INACTIVE split)
 const colorSchemes = {
   default: {
-    ACTIVE: {
-      titleBar: {
-        "titleBar.activeBackground": "#49124b",
-        "titleBar.activeForeground": "#ffffff"
-      },
-      activityBar: {
-        "activityBar.background": "#49124b",
-        "activityBar.foreground": "#ffffff"
-      },
-      statusBar: {
-        "statusBar.background": "#49124b",
-        "statusBar.foreground": "#ffffff",
-        "statusBar.noFolderBackground": "#49124b",
-        "statusBar.noFolderForeground": "#ffffff"
-      }
-    },
-    INACTIVE: {
-      titleBar: {
-        "titleBar.inactiveBackground": "#0f0f0f",
-        "titleBar.inactiveForeground": "#e6e6e6"
-      },
-      activityBar: {
-        "activityBar.background": "#0f0f0f",
-        "activityBar.foreground": "#e6e6e6"
-      },
-      statusBar: {
-        "statusBar.background": "#0f0f0f",
-        "statusBar.foreground": "#e6e6e6",
-        "statusBar.noFolderBackground": "#0f0f0f",
-        "statusBar.noFolderForeground": "#e6e6e6"
-      }
-    }
+    "titleBar.activeBackground": "#49124b",
+    "titleBar.activeForeground": "#ffffff",
+    "titleBar.activeBorder": "#99459c",
+    "activityBar.background": "#49124b",
+    "activityBar.foreground": "#ffffff",
+    "activityBar.border": "#99459c",
+    "statusBar.background": "#49124b",
+    "statusBar.foreground": "#ffffff",
+    "statusBar.noFolderBackground": "#0f0f0f",
+    "statusBar.noFolderForeground": "#e6e6e6",
+    "statusBar.debuggingBackground": "#0f0f0f",
+    "statusBar.debuggingForeground": "#e6e6e6",
+    "titleBar.inactiveBackground": "#0f0f0f",
+    "titleBar.inactiveForeground": "#e6e6e6",
+    "activityBar.inactiveBackground": "#0f0f0f",
+    "activityBar.inactiveForeground": "#e6e6e6"
   }
-  // Add more schemes here as needed
 };
 
 function getColorScheme(cfg) {
@@ -49,12 +84,32 @@ function getColorScheme(cfg) {
   return colorSchemes[schemeName] || colorSchemes['default'];
 }
 
-function buildColorsSet(set, settings) {
+function buildColorsSet(scheme, settings) {
   const out = {};
   if (!settings) return out;
-  if (settings.toggleTitleBar && set.titleBar) Object.assign(out, set.titleBar);
-  if (settings.toggleActivityBar && set.activityBar) Object.assign(out, set.activityBar);
-  if (settings.toggleStatusBar && set.statusBar) Object.assign(out, set.statusBar);
+  // Only include keys for enabled UI parts
+  if (settings.toggleTitleBar) {
+    out["titleBar.activeBackground"] = scheme["titleBar.activeBackground"];
+    out["titleBar.activeForeground"] = scheme["titleBar.activeForeground"];
+    out["titleBar.activeBorder"] = scheme["titleBar.activeBorder"];
+    out["titleBar.inactiveBackground"] = scheme["titleBar.inactiveBackground"];
+    out["titleBar.inactiveForeground"] = scheme["titleBar.inactiveForeground"];
+  }
+  if (settings.toggleActivityBar) {
+    out["activityBar.background"] = scheme["activityBar.background"];
+    out["activityBar.foreground"] = scheme["activityBar.foreground"];
+    out["activityBar.border"] = scheme["activityBar.border"];
+    out["activityBar.inactiveBackground"] = scheme["activityBar.inactiveBackground"];
+    out["activityBar.inactiveForeground"] = scheme["activityBar.inactiveForeground"];
+  }
+  if (settings.toggleStatusBar) {
+    out["statusBar.background"] = scheme["statusBar.background"];
+    out["statusBar.foreground"] = scheme["statusBar.foreground"];
+    out["statusBar.noFolderBackground"] = scheme["statusBar.noFolderBackground"];
+    out["statusBar.noFolderForeground"] = scheme["statusBar.noFolderForeground"];
+    out["statusBar.debuggingBackground"] = scheme["statusBar.debuggingBackground"];
+    out["statusBar.debuggingForeground"] = scheme["statusBar.debuggingForeground"];
+  }
   return out;
 }
 
@@ -144,10 +199,16 @@ function getActiveThemeName() {
 }
 
 function activate(context) {
+  // Register install/remove commands
+  context.subscriptions.push(vscode.commands.registerCommand('rivershade.installBling', installBling));
+  context.subscriptions.push(vscode.commands.registerCommand('rivershade.removeBling', removeBling));
   // create an output channel for debugging in the Extension Host
   outputChannel = vscode.window.createOutputChannel('RiverShade');
   extensionMode = context.extensionMode;
-  outputChannel.appendLine(`RiverShade activated (mode=${extensionMode})`);
+  outputChannel.appendLine(`RiverShade extension: activate() called (mode=${extensionMode})`);
+  try {
+    vscode.window.showInformationMessage('RiverShade extension activated.');
+  } catch (e) { /* ignore UI errors */ }
   try {
     // show where the runtime loaded this extension from so developers can verify
     const loadedFrom = context && context.extensionPath ? context.extensionPath : __dirname;
@@ -192,19 +253,27 @@ function activate(context) {
   }
 
   // apply initial state
+  async function applyColorsAndMaybeReload(colors) {
+    await applyColors(colors);
+    const reload = cfg.get('riverShade.reloadWindowOnChange', cfg.get('focusColorToggle.reloadWindowOnChange', false));
+    if (reload) {
+      await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    }
+  }
+
   if (settings.enabled) {
-    const scheme = getColorScheme(cfg);
-    applyColors(buildColorsSet(vscode.window.state.focused ? scheme.ACTIVE : scheme.INACTIVE, settings))
+  const scheme = getColorScheme(cfg);
+  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
       .catch(err => {
-        try { if (outputChannel) outputChannel.appendLine('Initial applyColors failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
-        console.error('Initial applyColors failed', err);
+        try { if (outputChannel) outputChannel.appendLine('Initial applyColorsAndMaybeReload failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+        console.error('Initial applyColorsAndMaybeReload failed', err);
       });
   }
 
   const sub = vscode.window.onDidChangeWindowState(st => {
     if (!settings.enabled) return;
-    const scheme = getColorScheme(cfg);
-    applyColors(buildColorsSet(st.focused ? scheme.ACTIVE : scheme.INACTIVE, settings));
+  const scheme = getColorScheme(cfg);
+  applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
   });
   context.subscriptions.push(sub);
 
@@ -212,8 +281,8 @@ function activate(context) {
   if (vscode.window.onDidChangeActiveColorTheme) {
     const themeSub = vscode.window.onDidChangeActiveColorTheme(() => {
       if (!settings.enabled) return;
-      const scheme = getColorScheme(cfg);
-      applyColors(buildColorsSet(vscode.window.state.focused ? scheme.ACTIVE : scheme.INACTIVE, settings));
+  const scheme = getColorScheme(cfg);
+  applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
     });
     context.subscriptions.push(themeSub);
   }
@@ -225,8 +294,8 @@ function activate(context) {
       return;
     }
     try {
-      const scheme = getColorScheme(cfg);
-      applyColors(buildColorsSet(isFocused ? scheme.INACTIVE : scheme.ACTIVE, settings))
+  const scheme = getColorScheme(cfg);
+  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
         .then(() => vscode.window.showInformationMessage('Toggled focus colors'))
         .catch(err => {
           try { if (outputChannel) outputChannel.appendLine('focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
@@ -247,8 +316,8 @@ function activate(context) {
       return;
     }
     try {
-      const scheme = getColorScheme(cfg);
-      applyColors(buildColorsSet(isFocused ? scheme.INACTIVE : scheme.ACTIVE, settings))
+  const scheme = getColorScheme(cfg);
+  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
         .then(() => vscode.window.showInformationMessage('RiverShade: Toggled focus colors'))
         .catch(err => {
           try { if (outputChannel) outputChannel.appendLine('rivershade.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }

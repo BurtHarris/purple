@@ -2,17 +2,15 @@
   "name": "rivershade",
   "displayName": "RiverShade — Focus Color Toggle",
   "publisher": "local",
-  "version": "0.1.0",
+  "version": "0.1.10",
   "engines": {
     "vscode": "^1.75.0"
   },
   "main": "./extension.js",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
   "scripts": {
     "test": "node ./test/runTest.js",
-    "lint": "eslint \"test/**/*.js\" \"extension.js\" --ext .js"
+    "lint": "eslint \"test/**/*.js\" \"extension.js\" --ext .js",
+    "bump-patch": "npm version patch --no-git-tag-version"
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
@@ -20,6 +18,14 @@
     "chai": "^4.3.7",
     "eslint": "^8.48.0"
   },
+  "activationEvents": [
+    "onCommand:focusColorToggle.toggle",
+    "onCommand:rivershade.toggle",
+    "onCommand:rivershade.installBling",
+    "onCommand:rivershade.removeBling",
+    "onCommand:rivershade.diagnose",
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
@@ -29,9 +35,20 @@
       {
         "command": "rivershade.toggle",
         "title": "RiverShade: Apply Focus Colors"
+      },
+      {
+        "command": "rivershade.installBling",
+        "title": "RiverShade: Install Bling"
+      },
+      {
+        "command": "rivershade.removeBling",
+        "title": "RiverShade: Remove Bling"
+      },
+      {
+        "command": "rivershade.diagnose",
+        "title": "RiverShade: Diagnose"
       }
-    ]
-    ,
+    ],
     "configuration": {
       "type": "object",
       "title": "Focus Color Toggle",
@@ -70,8 +87,7 @@
           "type": "boolean",
           "default": true,
           "description": "Toggle status bar colors on focus changes."
-        }
-        ,
+        },
         "riverShade.toggleStatusBar": {
           "type": "boolean",
           "default": true,
@@ -79,11 +95,14 @@
         },
         "focusColorToggle.updateTarget": {
           "type": "string",
-          "enum": ["global", "workspace", "both"],
+          "enum": [
+            "global",
+            "workspace",
+            "both"
+          ],
           "default": "global",
           "description": "Where to write workbench.colorCustomizations: 'global' (User), 'workspace', or 'both'."
-        }
-        ,
+        },
         "focusColorToggle.colorScheme": {
           "type": "string",
           "default": "default",
@@ -93,10 +112,24 @@
           "type": "string",
           "default": "default",
           "description": "Select the color scheme for RiverShade. 'default' uses the built-in colors."
-        }
+        },
+        "focusColorToggle.reloadWindowOnChange": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reload the VS Code window automatically after color changes to force UI refresh."
+        },
+        "riverShade.reloadWindowOnChange": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reload the VS Code window automatically after color changes to force UI refresh."
+        },
         "riverShade.updateTarget": {
           "type": "string",
-          "enum": ["global", "workspace", "both"],
+          "enum": [
+            "global",
+            "workspace",
+            "both"
+          ],
           "default": "global",
           "description": "Where to write workbench.colorCustomizations (alias for focusColorToggle.updateTarget)."
         }
