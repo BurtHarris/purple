@@ -36,7 +36,8 @@ function traceLog() {
 // RiverShade output channel and also emits a trace event.
 function rsLog(operation, message) {
   try {
-    const line = `RiverShade: ${operation}: ${message}`;
+    const ts = new Date().toISOString();
+    const line = `${ts} RiverShade: ${operation}: ${message}`;
     if (outputChannel) outputChannel.appendLine(line);
   } catch (e) { /* ignore */ }
   try { traceLog(operation, message); } catch (e) { /* ignore */ }
@@ -524,8 +525,13 @@ function activate(context) {
       const origAppend = outputChannel.appendLine.bind(outputChannel);
       outputChannel.appendLine = function (msg) {
         try {
+          const text = String(msg || '');
+          // If msg already looks like it starts with an ISO timestamp, don't double-prefix.
+          // ISO timestamps start like 2025-09-25T12:34:56.789Z
+          const isoLike = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}/;
+          if (isoLike.test(text)) return origAppend(text);
           const ts = new Date().toISOString();
-          origAppend(`${ts} ${msg}`);
+          origAppend(`${ts} ${text}`);
         } catch (e) {
           try { origAppend(String(msg)); } catch (e) { /* ignore */ }
         }
