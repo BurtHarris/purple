@@ -12,6 +12,20 @@ Introduction
 
 This extension changes the colors of the top, side, and bottom bars in Visual Studio Code depending on whether the VS Code window is focused (active) or not. When VS Code is the active app, the bars use a bright color. When you switch to another app, the bars use a darker color. This helps you quickly see if VS Code is the active window.
 
+Developer notes
+---------------
+
+- The temporary `_suppressAutoApply` guard was removed; the extension now uses a single `_operationInProgress` flag to serialize operations and avoid races.
+- Trace-to-disk logging has been disabled by default (TRACE_ENABLED = false) to reduce noisy artifacts during normal use.
+- Packaging: the repo includes a commit-inclusive packaging helper. To package and (optionally) run the commit cycle use:
+
+```powershell
+npm run build        # alias for npm run package-cycle
+npm run package-cycle
+```
+
+`package-cycle` will attempt a pre-package commit, bump the patch version, package a .vsix, and commit the package output. Only run it if you're comfortable with automatic commits.
+
 Alpha Test Notice
 -----------------
 

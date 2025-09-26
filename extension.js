@@ -5,6 +5,10 @@ let activationContext;
 let extensionMode;
 let _warnedAboutTitleBarStyle = false;
 let _operationInProgress = false;
+// Debounce timer used when scheduling re-applies; module-scoped so handlers can
+// reference and clear it safely.
+let _applyDebounceTimer = null;
+const APPLY_DEBOUNCE_MS = 50;
 // Note: window-state handler disabled below; debounce state not required
 // Whether to require a modal confirmation before install/remove actions.
 let requireConfirmation = true;
@@ -180,6 +184,12 @@ async function removeBling() {
   // ensure we clear them on synchronous failures or early returns below.
   let cfg;
   let scheme;
+  // Declare these at function scope so they're visible to the post-setup
+  // Promise handling/verification code below (they were previously declared
+  // inside the try block which made them out-of-scope later and triggered
+  // lint/no-undef errors).
+  const updates = [];
+  const folderUpdates = [];
   try {
     cfg = vscode.workspace.getConfiguration();
     scheme = getColorScheme(cfg);
@@ -196,7 +206,7 @@ async function removeBling() {
   // Always attempt to clear both global and workspace scopes to be thorough
   const targets = [vscode.ConfigurationTarget.Global, vscode.ConfigurationTarget.Workspace];
 
-  const updates = [];
+  // We'll collect update promises for global/workspace targets and folder updates
 
   const inspect = cfg.inspect('workbench.colorCustomizations') || {};
 
@@ -269,7 +279,6 @@ async function removeBling() {
   // will throw in that case. We catch that specific failure and emit a
   // friendly guidance message pointing users to the bundled sanitization
   // script or to manually edit the folder .vscode/settings.json.
-  const folderUpdates = [];
   try {
     const folders = vscode.workspace.workspaceFolders || [];
     for (const f of folders) {
