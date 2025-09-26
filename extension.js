@@ -40,7 +40,6 @@ let colorRuntime = null; // runtime passed to colors module
 let outputHelpers = null;
 let colors = null;
 let extensionMode = null;
-let activationContext = null;
 
 function getConfig() {
   const cfg = vscode.workspace.getConfiguration();
@@ -66,17 +65,6 @@ function getActiveThemeName() {
   try { return vscode.workspace.getConfiguration().get('workbench.colorTheme'); } catch (e) { return undefined; }
 }
 
-// Helper: read package.json from disk to avoid require() cache
-function readPkg() {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const pkgPath = path.join(__dirname, 'package.json');
-    return JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  } catch (e) {
-    return null;
-  }
-}
 
 // Central permission helper. Auto-approves in Test mode or when confirmation disabled.
 async function requestPermission(operation, promptText, confirmLabel = 'Yes') {
@@ -144,56 +132,10 @@ async function removeBlingCommand() {
   }
 }
 
-async function toggleCommand() {
-  const { cfg, settings } = getConfig();
-  if (!settings.enabled) { outputHelpers.timestampedLine(settings.timestampLogs, 'RiverShade: extension disabled in settings'); return; }
-  try {
-    const scheme = getColorScheme(cfg);
-    const newColors = colorsModule.init({
-      vscode, outputChannel: outputHelpers.outputChannel, applyColors: applyColors, getColorScheme, getActiveThemeName, traceLog: null, rsLog: null, activationContext: null
-    });
-    // build colors inline to avoid race
-    const built = newColors.buildColorsSet(scheme, { toggleTitleBar: settings.toggleTitleBar, toggleActivityBar: settings.toggleActivityBar, toggleStatusBar: settings.toggleStatusBar });
-    await applyColors(built);
-    if (settings.reloadWindowOnChange) {
-      try { await vscode.commands.executeCommand('workbench.action.reloadWindow'); } catch (e) { /* ignore */ }
-    }
-  } catch (e) {
-    outputHelpers.timestampedLine(settings.timestampLogs, 'RiverShade: toggle error:', e && e.message ? e.message : String(e));
-  }
-}
-
-async function diagnoseCommand() {
-  const { settings } = getConfig();
-  try {
-    const cfg = vscode.workspace.getConfiguration();
-    const inspect = cfg.inspect('workbench.colorCustomizations') || {};
-    const pkg = readPkg();
-    const info = { version: pkg && pkg.version ? pkg.version : null, inspect };
-    outputHelpers.timestampedLine(settings.timestampLogs, 'RiverShade: diagnose inspect:', JSON.stringify(info, null, 2));
-    try { vscode.window.showInformationMessage('RiverShade: diagnosis logged to output channel.'); } catch (e) { /* ignore */ }
-    return info;
-  } catch (e) {
-    outputHelpers.timestampedLine(settings.timestampLogs, 'RiverShade: diagnose error:', e && e.message ? e.message : String(e));
-  }
-}
-
-async function checkInstallCommand() {
-  // Dev host only helper to check first-install status
-  try {
-    const globalState = (global.__rivershade_activation_context__ && global.__rivershade_activation_context__.globalState) || { get: () => undefined };
-    const v = globalState.get && globalState.get('rivershade.firstInstall');
-    vscode.window.showInformationMessage('RiverShade: firstInstall=' + String(v));
-  } catch (e) {
-    outputHelpers.timestampedLine(false, 'RiverShade: checkInstall error:', e && e.message ? e.message : String(e));
-  }
-}
-
 function activate(context) {
   outputHelpers = createOutputHelpers('RiverShade');
   // expose activationContext globally for test helpers that inspect firstInstall
-  activationContext = context;
-  global.__rivershade_activation_context__ = context;
+  // (removed - no global export)
   extensionMode = context.extensionMode;
 
   // Set the real applyColors implementation now that outputHelpers is ready
@@ -207,19 +149,14 @@ function activate(context) {
     getColorScheme,
     getActiveThemeName,
     traceLog: null,
-    rsLog: null,
-    activationContext: context
+    rsLog: null
   };
 
   colors = colorsModule.init(colorRuntime);
 
-  // register commands
-  context.subscriptions.push(vscode.commands.registerCommand('focusColorToggle.toggle', toggleCommand));
-  context.subscriptions.push(vscode.commands.registerCommand('rivershade.toggle', toggleCommand));
+  // register only install/remove commands
   context.subscriptions.push(vscode.commands.registerCommand('rivershade.installBling', installBlingCommand));
   context.subscriptions.push(vscode.commands.registerCommand('rivershade.removeBling', removeBlingCommand));
-  context.subscriptions.push(vscode.commands.registerCommand('rivershade.diagnose', diagnoseCommand));
-  context.subscriptions.push(vscode.commands.registerCommand('rivershade.checkInstall', checkInstallCommand));
 
   // run initial apply if firstInstall flag not set
   try {
