@@ -31,29 +31,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "focusColorToggle.toggle",
-        "title": "Focus Color Toggle: Apply Now"
-      },
-      {
-        "command": "rivershade.toggle",
-        "title": "RiverShade: Apply Focus Colors"
-      },
-      {
         "command": "rivershade.installBling",
         "title": "RiverShade: Install Bling"
       },
       {
         "command": "rivershade.removeBling",
         "title": "RiverShade: Remove Bling"
-      },
-      {
-        "command": "rivershade.diagnose",
-        "title": "RiverShade: Diagnose"
-      }
-      ,
-      {
-        "command": "rivershade.checkInstall",
-        "title": "RiverShade: Check Install (Dev Host)"
       }
     ],
     "configuration": {
