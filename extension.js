@@ -1,5 +1,6 @@
 // Install purple bling customizations
 async function installBling() {
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: Command invoked: rivershade.installBling'); } catch (e) { /* ignore */ }
   const cfg = vscode.workspace.getConfiguration();
   const scheme = getColorScheme(cfg);
   const settings = {
@@ -9,43 +10,94 @@ async function installBling() {
   };
   const colors = buildColorsSet(scheme, settings);
   await applyColors(colors);
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: installBling: applied colors'); } catch (e) { /* ignore */ }
   vscode.window.showInformationMessage('RiverShade: color customizations installed.');
 }
 
 // Remove all bling customizations set by the extension
 async function removeBling() {
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: Command invoked: rivershade.removeBling'); } catch (e) { /* ignore */ }
   const cfg = vscode.workspace.getConfiguration();
-  const current = cfg.get('workbench.colorCustomizations') || {};
-  // Clone the config object to avoid mutating VS Code proxy
-  const clone = JSON.parse(JSON.stringify(current));
   const scheme = getColorScheme(cfg);
   const keysToRemove = Object.keys(scheme);
-  let changed = false;
-  for (const k of keysToRemove) {
-    if (k in clone) {
-      delete clone[k];
-      changed = true;
+
+  // Determine targets based on the updateTarget setting (global/workspace/both)
+  const updateTargetSetting = vscode.workspace.getConfiguration().get('focusColorToggle.updateTarget', 'global');
+  const targets = mapUpdateTargetToConfigTargets(updateTargetSetting);
+
+  const updates = [];
+  let anyRemoved = false;
+
+  // Use inspect to read values per target so we remove only from that scope
+  const inspect = cfg.inspect('workbench.colorCustomizations') || {};
+
+  for (const t of targets) {
+    // pick the correct per-target value from inspect
+    let currentValue;
+    if (t === vscode.ConfigurationTarget.Global) currentValue = inspect.globalValue;
+    else if (t === vscode.ConfigurationTarget.Workspace) currentValue = inspect.workspaceValue;
+    else currentValue = inspect.globalValue || inspect.workspaceValue || {};
+
+    if (!currentValue || Object.keys(currentValue).length === 0) {
+      // nothing set at this scope
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: nothing in target ${t}`); } catch (e) { /* ignore */ }
+      continue;
     }
-  }
-  // Also remove theme-scoped blocks if present
-  const theme = getActiveThemeName();
-  if (theme) {
-    const themeKey = `[${theme}]`;
-    if (clone[themeKey]) {
-      for (const k of keysToRemove) {
-        if (k in clone[themeKey]) {
-          delete clone[themeKey][k];
-          changed = true;
-        }
+
+    // Clone the scope-specific object and remove keys
+    const clone = JSON.parse(JSON.stringify(currentValue));
+    const theme = getActiveThemeName();
+    let changed = false;
+
+    // remove top-level keys
+    for (const k of keysToRemove) {
+      if (k in clone) {
+        delete clone[k];
+        changed = true;
       }
     }
+
+    // remove theme-scoped keys
+    if (theme) {
+      const themeKey = `[${theme}]`;
+      if (clone[themeKey]) {
+        for (const k of keysToRemove) {
+          if (k in clone[themeKey]) {
+            delete clone[themeKey][k];
+            changed = true;
+          }
+        }
+        // if theme block became empty, remove it
+        if (Object.keys(clone[themeKey]).length === 0) delete clone[themeKey];
+      }
+    }
+
+    if (changed) {
+      anyRemoved = true;
+      // if clone is empty, pass undefined to remove the setting at that scope
+      const valueToSet = Object.keys(clone).length === 0 ? undefined : clone;
+      updates.push(cfg.update('workbench.colorCustomizations', valueToSet, t));
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: scheduled remove in target ${t}`); } catch (e) { /* ignore */ }
+    } else {
+      try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: no bling found in target ${t}`); } catch (e) { /* ignore */ }
+    }
   }
-  if (changed) {
-    await cfg.update('workbench.colorCustomizations', clone, vscode.ConfigurationTarget.Global);
-    vscode.window.showInformationMessage('RiverShade: bling removed.');
-  } else {
-    vscode.window.showInformationMessage('RiverShade: no bling to remove.');
+
+  if (updates.length === 0) {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: no bling to remove in any target'); } catch (e) { /* ignore */ }
+    try { vscode.window.showInformationMessage('RiverShade: no bling to remove.'); } catch (e) { /* ignore UI errors */ }
+    return Promise.resolve(false);
   }
+
+  return Promise.all(updates).then(() => {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: removed bling in configured targets'); } catch (e) { /* ignore */ }
+    try { vscode.window.showInformationMessage('RiverShade: bling removed.'); } catch (e) { /* ignore UI errors */ }
+    return true;
+  }).catch(err => {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+    try { vscode.window.showErrorMessage('RiverShade: failed to remove bling'); } catch (e) { /* ignore UI errors */ }
+    return Promise.reject(err);
+  });
 }
 const vscode = require('vscode');
 
@@ -139,6 +191,8 @@ function applyColors(colors) {
       outputChannel.appendLine('Applying color customizations:');
       outputChannel.appendLine(JSON.stringify(merged, null, 2));
     }
+    // Also log to console so test harness output captures it
+    try { console.log('RiverShade: Applying color customizations:', JSON.stringify(merged)); } catch (e) { /* ignore */ }
   } catch (e) {
     // ignore logging errors
   }
@@ -199,20 +253,132 @@ function getActiveThemeName() {
 }
 
 function activate(context) {
+  console.log('RiverShade: activate() entry');
+  // create an output channel early so any activation logs are captured
+  outputChannel = vscode.window.createOutputChannel('RiverShade');
+  try { outputChannel.appendLine('RiverShade: activate() start'); } catch (e) { /* ignore */ }
+
+  // record extension mode early so dev-only behavior can be gated
+  extensionMode = context.extensionMode;
+
+  // Helper: read package.json from disk to avoid require() cache
+  function readPkg() {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const pkgPath = path.join(__dirname, 'package.json');
+      return JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Helper: compute a simple fingerprint of contributed commands
+  function getContribFingerprint() {
+    try {
+      const pkg = readPkg();
+      const cmds = (pkg && pkg.contributes && pkg.contributes.commands) ? pkg.contributes.commands.map(c => c.command).sort() : [];
+      return cmds.join('|');
+    } catch (e) {
+      return '';
+    }
+  }
+  // Helper: bump patch version in package.json if commands changed (dev/test only)
+  if (extensionMode === vscode.ExtensionMode.Development || extensionMode === vscode.ExtensionMode.Test) {
+    try {
+      const contribFp = getContribFingerprint();
+      const prevFp = context.globalState.get('rivershade.contribFingerprint');
+      if (contribFp !== prevFp) {
+        try { outputChannel.appendLine(`RiverShade: contributed commands changed (prev=${prevFp || '<none>'} current=${contribFp})`); } catch (e) { /* ignore */ }
+        // Read current package.json so we can compute the expected new patch version
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          const pkgPath = path.join(__dirname, 'package.json');
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          const ver = pkg.version || '0.0.0';
+          const parts = ver.split('.').map(n => parseInt(n, 10) || 0);
+          parts[2] = (parts[2] || 0) + 1; // bump patch
+          const newVer = parts.join('.');
+          // Dev-friendly: do not write package.json at runtime. Ask the developer to run npm to bump the version
+          try { outputChannel.appendLine(`RiverShade: contributed commands changed; run 'npm run bump-patch' to update package.json from ${ver} → ${newVer}`); } catch (e) { /* ignore */ }
+          // Save fingerprint and expected version in globalState so tests/dev flows can detect the intended version
+          context.globalState.update('rivershade.contribFingerprint', contribFp);
+          context.globalState.update('rivershade.version', newVer);
+        } catch (e) {
+          try { outputChannel.appendLine('RiverShade: failed to compute bumped version: ' + (e && e.message)); } catch (e) { /* ignore */ }
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Version check: notify on install/update and store installed version
+  try {
+    const pkg = readPkg();
+    const currentVersion = pkg && pkg.version ? pkg.version : null;
+    const previousVersion = context.globalState.get('rivershade.version');
+    if (currentVersion && previousVersion !== currentVersion) {
+  try { if (outputChannel) outputChannel.appendLine(`RiverShade: Version check: previous=${previousVersion || '<none>'} current=${currentVersion}`); } catch (e) { /* ignore */ }
+      // Run one-time update logic here (could be migration or user notice)
+      try {
+        if (!previousVersion) {
+          vscode.window.showInformationMessage(`RiverShade installed (v${currentVersion})`);
+          try { if (outputChannel) outputChannel.appendLine(`RiverShade: installed v${currentVersion}`); } catch (e) { /* ignore */ }
+        } else {
+          vscode.window.showInformationMessage(`RiverShade updated: ${previousVersion} → ${currentVersion}`);
+          try { if (outputChannel) outputChannel.appendLine(`RiverShade: updated: ${previousVersion} -> ${currentVersion}`); } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore UI errors */ }
+      // Save the new version
+      context.globalState.update('rivershade.version', currentVersion);
+    }
+  } catch (e) {
+    // ignore package read errors
+  }
   // Register install/remove commands
-  context.subscriptions.push(vscode.commands.registerCommand('rivershade.installBling', installBling));
-  context.subscriptions.push(vscode.commands.registerCommand('rivershade.removeBling', removeBling));
+  context.subscriptions.push(vscode.commands.registerCommand('rivershade.installBling', () => {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: Register handler invoked: rivershade.installBling'); } catch (e) { /* ignore */ }
+    return installBling();
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('rivershade.removeBling', () => {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: Register handler invoked: rivershade.removeBling'); } catch (e) { /* ignore */ }
+    return removeBling();
+  }));
+  // Diagnostic command to dump runtime state to the output channel
+  context.subscriptions.push(vscode.commands.registerCommand('rivershade.diagnose', () => {
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: Register handler invoked: rivershade.diagnose'); } catch (e) { /* ignore */ }
+    try {
+      const pkg = readPkg();
+      const theme = getActiveThemeName();
+      const info = {
+        version: pkg && pkg.version ? pkg.version : '<unknown>',
+        mode: String(extensionMode),
+        theme: theme || null,
+        activated: new Date().toISOString(),
+        settings: (() => { try { return vscode.workspace.getConfiguration(); } catch (e) { return null; } })()
+      };
+      if (outputChannel) {
+        outputChannel.appendLine('RiverShade: Diagnose output:');
+        outputChannel.appendLine(JSON.stringify(info, null, 2));
+      }
+      return Promise.resolve(info);
+    } catch (e) {
+      try { if (outputChannel) outputChannel.appendLine('RiverShade: diagnose failed: ' + (e && e.message)); } catch (e) { /* ignore */ }
+      return Promise.reject(e);
+    }
+  }));
   // create an output channel for debugging in the Extension Host
   outputChannel = vscode.window.createOutputChannel('RiverShade');
   extensionMode = context.extensionMode;
   outputChannel.appendLine(`RiverShade extension: activate() called (mode=${extensionMode})`);
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: Activation: commands registered and outputChannel created'); } catch (e) { /* ignore */ }
   try {
     vscode.window.showInformationMessage('RiverShade extension activated.');
   } catch (e) { /* ignore UI errors */ }
   try {
     // show where the runtime loaded this extension from so developers can verify
     const loadedFrom = context && context.extensionPath ? context.extensionPath : __dirname;
-    outputChannel.appendLine(`RiverShade loaded from: ${loadedFrom}`);
+  outputChannel.appendLine(`RiverShade: loaded from: ${loadedFrom}`);
     // In development/test modes also show a one-time information message so it's obvious
     if (extensionMode === vscode.ExtensionMode.Development || extensionMode === vscode.ExtensionMode.Test) {
       try { vscode.window.showInformationMessage(`RiverShade loaded from: ${loadedFrom}`); } catch (e) { /* ignore UI errors */ }
@@ -265,12 +431,12 @@ function activate(context) {
   const scheme = getColorScheme(cfg);
   applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
       .catch(err => {
-        try { if (outputChannel) outputChannel.appendLine('Initial applyColorsAndMaybeReload failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+    try { if (outputChannel) outputChannel.appendLine('RiverShade: Initial applyColorsAndMaybeReload failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
         console.error('Initial applyColorsAndMaybeReload failed', err);
       });
   }
 
-  const sub = vscode.window.onDidChangeWindowState(st => {
+  const sub = vscode.window.onDidChangeWindowState(_st => {
     if (!settings.enabled) return;
   const scheme = getColorScheme(cfg);
   applyColorsAndMaybeReload(buildColorsSet(scheme, settings));
@@ -288,17 +454,17 @@ function activate(context) {
   }
 
   const disposable = vscode.commands.registerCommand('focusColorToggle.toggle', () => {
-    const isFocused = vscode.window.state.focused;
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: Command invoked: focusColorToggle.toggle'); } catch (e) { /* ignore */ }
     if (!settings.enabled) {
       vscode.window.showInformationMessage('Focus Color Toggle is disabled in settings');
       return;
     }
     try {
   const scheme = getColorScheme(cfg);
-  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
-        .then(() => vscode.window.showInformationMessage('Toggled focus colors'))
+  return applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
+    .then(() => { try { vscode.window.showInformationMessage('Toggled focus colors'); } catch (e) { /* ignore */ } })
         .catch(err => {
-          try { if (outputChannel) outputChannel.appendLine('focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
           console.error('focusColorToggle.toggle failed', err);
           vscode.window.showErrorMessage('Failed to apply focus colors');
         });
@@ -310,17 +476,17 @@ function activate(context) {
 
   // register new RiverShade command id as an alias
   const disposable2 = vscode.commands.registerCommand('rivershade.toggle', () => {
-    const isFocused = vscode.window.state.focused;
+  try { if (outputChannel) outputChannel.appendLine('RiverShade: Command invoked: rivershade.toggle'); } catch (e) { /* ignore */ }
     if (!settings.enabled) {
       vscode.window.showInformationMessage('RiverShade is disabled in settings');
       return;
     }
     try {
   const scheme = getColorScheme(cfg);
-  applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
-        .then(() => vscode.window.showInformationMessage('RiverShade: Toggled focus colors'))
+  return applyColorsAndMaybeReload(buildColorsSet(scheme, settings))
+    .then(() => { try { vscode.window.showInformationMessage('RiverShade: Toggled focus colors'); } catch (e) { /* ignore */ } })
         .catch(err => {
-          try { if (outputChannel) outputChannel.appendLine('rivershade.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: rivershade.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
           console.error('rivershade.toggle failed', err);
           vscode.window.showErrorMessage('Failed to apply RiverShade focus colors');
         });
