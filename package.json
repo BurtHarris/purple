@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/BurtHarris/purple.git"
   },
-  "version": "0.2.0",
+  "version": "0.2.5",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -14,7 +14,9 @@
   "scripts": {
     "test": "node ./test/runTest.js",
     "lint": "eslint \"test/**/*.js\" \"extension.js\" --ext .js",
-    "bump-patch": "npm version patch --no-git-tag-version"
+    "bump-patch": "npm version patch --no-git-tag-version",
+    "package-with-bump": "npm run bump-patch && pnpm exec vsce package",
+    "package-cycle": "node ./scripts/package-commit-cycle.js"
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
@@ -127,6 +129,16 @@
           "type": "boolean",
           "default": false,
           "description": "Reload the VS Code window automatically after color changes to force UI refresh."
+        },
+        "riverShade.requireConfirmation": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require a modal confirmation before RiverShade installs or removes color customizations."
+        },
+        "riverShade.timestampLogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Prefix RiverShade output lines with an ISO timestamp when true."
         },
         "riverShade.updateTarget": {
           "type": "string",
