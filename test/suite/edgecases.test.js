@@ -18,14 +18,15 @@ describe('Edge cases', function() {
     const key = 'workbench.colorCustomizations';
     const before = config.get(key);
 
-    // Attempt to remove global value to simulate missing setting
+  // Attempt to remove global value to simulate missing setting
     try {
       await config.update(key, undefined, vscode.ConfigurationTarget.Global);
     } catch (e) {
       // ignore permission issues in some environments
     }
 
-    await vscode.commands.executeCommand('focusColorToggle.toggle');
+  // Use installBling to apply colors (toggle command removed)
+  await vscode.commands.executeCommand('rivershade.installBling');
 
     const current = config.get(key);
     expect(current).to.be.ok;
@@ -41,7 +42,8 @@ describe('Edge cases', function() {
 
     // Fire toggles rapidly and await each to ensure handler returns its promise.
     for (let i = 0; i < 10; i++) {
-      await vscode.commands.executeCommand('focusColorToggle.toggle');
+      // repeatedly install (idempotent) to simulate repeated operations
+      await vscode.commands.executeCommand('rivershade.installBling');
     }
 
     // Sometimes writes take a short moment in the extension host; retry inspect() a few times
@@ -87,9 +89,9 @@ describe('Edge cases', function() {
     const beforeWorkspace = (vscode.workspace.getConfiguration().inspect(key) || {}).workspaceValue;
 
     // set the extension option to workspace
-    await vscode.workspace.getConfiguration().update('focusColorToggle.updateTarget', 'workspace', vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration().update('focusColorToggle.updateTarget', 'workspace', vscode.ConfigurationTarget.Global);
 
-    await vscode.commands.executeCommand('focusColorToggle.toggle');
+  await vscode.commands.executeCommand('rivershade.installBling');
 
     const inspect = vscode.workspace.getConfiguration().inspect(key) || {};
     const workspaceVal = inspect.workspaceValue;
@@ -108,9 +110,9 @@ describe('Edge cases', function() {
     const beforeGlobal = config.get(key);
     const beforeWorkspace = (vscode.workspace.getConfiguration().inspect(key) || {}).workspaceValue;
 
-    await vscode.workspace.getConfiguration().update('focusColorToggle.updateTarget', 'both', vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration().update('focusColorToggle.updateTarget', 'both', vscode.ConfigurationTarget.Global);
 
-    await vscode.commands.executeCommand('focusColorToggle.toggle');
+  await vscode.commands.executeCommand('rivershade.installBling');
 
     const inspect = vscode.workspace.getConfiguration().inspect(key) || {};
     expect(inspect.globalValue || inspect.workspaceValue).to.be.ok;

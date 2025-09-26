@@ -10,8 +10,8 @@ describe('Color application', function() {
     await ext.activate();
     expect(ext.isActive).to.be.true;
 
-    // Ensure initial toggle runs
-    await vscode.commands.executeCommand('focusColorToggle.toggle');
+  // Ensure initial install runs
+  await vscode.commands.executeCommand('rivershade.installBling');
 
     // The extension writes to workbench.colorCustomizations either globally or to workspace
     const inspect = vscode.workspace.getConfiguration().inspect('workbench.colorCustomizations');

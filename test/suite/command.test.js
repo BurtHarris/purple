@@ -9,8 +9,8 @@ describe('Command Tests', function() {
     const key = 'workbench.colorCustomizations';
     const before = config.get(key);
 
-    // Execute the command and ensure it doesn't throw
-    await vscode.commands.executeCommand('focusColorToggle.toggle');
+  // Execute the remaining command and ensure it doesn't throw
+  await vscode.commands.executeCommand('rivershade.installBling');
 
     // Restore previous settings if the extension changed anything
     await config.update(key, before, vscode.ConfigurationTarget.Global);
