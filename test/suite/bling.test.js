@@ -8,10 +8,10 @@ describe('Bling Customizations', function() {
     await vscode.commands.executeCommand('rivershade.installBling');
     const cfg = vscode.workspace.getConfiguration();
     const current = cfg.get('workbench.colorCustomizations') || {};
-    // Check for a key unique to bling
-    expect(current['titleBar.activeBackground']).to.equal('#49124b');
-    expect(current['activityBar.background']).to.equal('#49124b');
-    expect(current['statusBar.background']).to.equal('#49124b');
+  // Check for a key unique to bling (updated to dark variant value)
+  expect(current['titleBar.activeBackground']).to.equal('#49124b');
+  expect(current['activityBar.background']).to.equal('#3a0e3c');
+  expect(current['statusBar.background']).to.equal('#49124b');
   });
 
   it('removes bling customizations', async () => {

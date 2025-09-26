@@ -6,7 +6,7 @@
     "type": "git",
     "url": "https://github.com/BurtHarris/purple.git"
   },
-  "version": "0.2.15",
+  "version": "0.2.20",
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -26,11 +26,6 @@
     "mocha": "^11.7.2"
   },
   "activationEvents": [
-    "onCommand:focusColorToggle.toggle",
-    "onCommand:rivershade.toggle",
-    "onCommand:rivershade.installBling",
-    "onCommand:rivershade.removeBling",
-    "onCommand:rivershade.diagnose",
     "onStartupFinished"
   ],
   "contributes": {
@@ -54,6 +49,11 @@
       {
         "command": "rivershade.diagnose",
         "title": "RiverShade: Diagnose"
+      }
+      ,
+      {
+        "command": "rivershade.checkInstall",
+        "title": "RiverShade: Check Install (Dev Host)"
       }
     ],
     "configuration": {

@@ -17,6 +17,7 @@ Developer notes
 
 - The temporary `_suppressAutoApply` guard was removed; the extension now uses a single `_operationInProgress` flag to serialize operations and avoid races.
 - Trace-to-disk logging has been disabled by default (TRACE_ENABLED = false) to reduce noisy artifacts during normal use.
+- Dev-host convenience: when running the Extension Development Host (F5) the extension performs a lightweight presence check on activation and will only write color customizations if the RiverShade keys are missing (or on a fresh install). This makes it easy to test behavior without packaging. You can also re-run the check manually from the Command Palette with the command "RiverShade: Check Install (Dev Host)".
 - Packaging: the repo includes a commit-inclusive packaging helper. To package and (optionally) run the commit cycle use:
 
 ```powershell
