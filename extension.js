@@ -250,7 +250,12 @@ async function removeBling() {
     }
   }
 
-  // Also attempt to clear folder-scoped configs
+  // Also attempt to clear folder-scoped configs where supported. Some settings
+  // (notably workbench.colorCustomizations) may not allow writes at the
+  // WorkspaceFolder scope in certain VS Code versions / contexts; the update
+  // will throw in that case. We catch that specific failure and emit a
+  // friendly guidance message pointing users to the bundled sanitization
+  // script or to manually edit the folder .vscode/settings.json.
   const folderUpdates = [];
   try {
     const folders = vscode.workspace.workspaceFolders || [];
@@ -258,8 +263,20 @@ async function removeBling() {
       try {
         const folderCfg = vscode.workspace.getConfiguration(undefined, f.uri);
         folderUpdates.push(folderCfg.update('workbench.colorCustomizations', undefined, vscode.ConfigurationTarget.WorkspaceFolder)
-          .then(() => { try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: cleared workbench.colorCustomizations for workspaceFolder=${f.name}`); } catch (e) { /* ignore */ } })
-          .catch(err => { try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: failed to clear workspaceFolder=${f.name}: ${err && err.message}`); } catch (e) { /* ignore */ } }));
+          .then(() => {
+            try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: cleared workbench.colorCustomizations for workspaceFolder=${f.name}`); } catch (e) { /* ignore */ }
+          })
+          .catch(err => {
+            const msg = (err && err.message) ? err.message : String(err);
+            try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: failed to clear workspaceFolder=${f.name}: ${msg}`); } catch (e) { /* ignore */ }
+            // Detect the common 'does not support the folder resource scope' error
+            // and provide a clear next-step to the user instead of a noisy stack.
+            if (msg && msg.indexOf('does not support the folder resource scope') !== -1 || msg.indexOf('folder resource scope') !== -1) {
+              try {
+                if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: note: 'workbench.colorCustomizations' does not support folder scope in this environment. To remove folder-scoped color customizations run the bundled script 'scripts\\remove-color-customizations.ps1' or manually edit the '.vscode/settings.json' in the folder ${f.name}.`);
+              } catch (e) { /* ignore */ }
+            }
+          }));
       } catch (e) { try { if (outputChannel) outputChannel.appendLine(`RiverShade: removeBling: error preparing folder update for ${f && f.name}: ${e && e.message}`); } catch (e) { /* ignore */ } }
     }
   } catch (e) { /* ignore */ }
@@ -502,20 +519,18 @@ function activate(context) {
   try { requireConfirmation = cfg.get('riverShade.requireConfirmation', true); } catch (e) { requireConfirmation = true; }
   // Optional timestamped logs controlled by setting (default: false)
   try {
-    const timestampLogs = cfg.get('riverShade.timestampLogs', false);
-    if (timestampLogs) {
-      try {
-        const origAppend = outputChannel.appendLine.bind(outputChannel);
-        outputChannel.appendLine = function (msg) {
-          try {
-            const ts = new Date().toISOString();
-            origAppend(`${ts} ${msg}`);
-          } catch (e) {
-            try { origAppend(String(msg)); } catch (e) { /* ignore */ }
-          }
-        };
-      } catch (e) { /* ignore wrapping errors */ }
-    }
+    // Always prefix logs with an ISO timestamp — user requested 'always'.
+    try {
+      const origAppend = outputChannel.appendLine.bind(outputChannel);
+      outputChannel.appendLine = function (msg) {
+        try {
+          const ts = new Date().toISOString();
+          origAppend(`${ts} ${msg}`);
+        } catch (e) {
+          try { origAppend(String(msg)); } catch (e) { /* ignore */ }
+        }
+      };
+    } catch (e) { /* ignore wrapping errors */ }
   } catch (e) { /* ignore config read errors */ }
   // support both old keys (focusColorToggle.*) and new riverShade.* aliases
   const settings = {
