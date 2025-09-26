@@ -1,47 +1,53 @@
 const vscode = require('vscode');
 
+
 let outputChannel = null;
 let extensionMode = null;
 let _warnedAboutTitleBarStyle = false;
 
-const ACTIVE = {
-  titleBar: {
-    "titleBar.activeBackground": "#49124b",
-    "titleBar.activeForeground": "#ffffff"
-  },
-  activityBar: {
-    "activityBar.background": "#49124b",
-    "activityBar.foreground": "#ffffff"
-  },
-  statusBar: {
-    "statusBar.background": "#49124b",
-    "statusBar.foreground": "#ffffff",
-    // ensure both folder and no-folder status bar keys are set so the status bar
-    // background is correct whether a workspace/folder is open or not
-    "statusBar.noFolderBackground": "#49124b",
-    "statusBar.noFolderForeground": "#ffffff"
+const colorSchemes = {
+  default: {
+    ACTIVE: {
+      titleBar: {
+        "titleBar.activeBackground": "#49124b",
+        "titleBar.activeForeground": "#ffffff"
+      },
+      activityBar: {
+        "activityBar.background": "#49124b",
+        "activityBar.foreground": "#ffffff"
+      },
+      statusBar: {
+        "statusBar.background": "#49124b",
+        "statusBar.foreground": "#ffffff",
+        "statusBar.noFolderBackground": "#49124b",
+        "statusBar.noFolderForeground": "#ffffff"
+      }
+    },
+    INACTIVE: {
+      titleBar: {
+        "titleBar.inactiveBackground": "#0f0f0f",
+        "titleBar.inactiveForeground": "#e6e6e6"
+      },
+      activityBar: {
+        "activityBar.background": "#0f0f0f",
+        "activityBar.foreground": "#e6e6e6"
+      },
+      statusBar: {
+        "statusBar.background": "#0f0f0f",
+        "statusBar.foreground": "#e6e6e6",
+        "statusBar.noFolderBackground": "#0f0f0f",
+        "statusBar.noFolderForeground": "#e6e6e6"
+      }
+    }
   }
+  // Add more schemes here as needed
 };
 
-const INACTIVE = {
-  titleBar: {
-    "titleBar.inactiveBackground": "#0f0f0f",
-    "titleBar.inactiveForeground": "#e6e6e6"
-  },
-  activityBar: {
-    // Some themes ignore the 'inactive' activityBar keys; set the main keys so
-    // the activity bar darkens when the window is unfocused
-    "activityBar.background": "#0f0f0f",
-    "activityBar.foreground": "#e6e6e6"
-  },
-  statusBar: {
-    // set both keys so the inactive palette applies whether a folder is open
-    "statusBar.background": "#0f0f0f",
-    "statusBar.foreground": "#e6e6e6",
-    "statusBar.noFolderBackground": "#0f0f0f",
-    "statusBar.noFolderForeground": "#e6e6e6"
-  }
-};
+function getColorScheme(cfg) {
+  // support both old and new keys
+  const schemeName = cfg.get('riverShade.colorScheme', cfg.get('focusColorToggle.colorScheme', 'default'));
+  return colorSchemes[schemeName] || colorSchemes['default'];
+}
 
 function buildColorsSet(set, settings) {
   const out = {};
@@ -159,7 +165,8 @@ function activate(context) {
     enabled: cfg.get('riverShade.enabled', cfg.get('focusColorToggle.enabled', true)),
     toggleTitleBar: cfg.get('riverShade.toggleTitleBar', cfg.get('focusColorToggle.toggleTitleBar', true)),
     toggleActivityBar: cfg.get('riverShade.toggleActivityBar', cfg.get('focusColorToggle.toggleActivityBar', true)),
-    toggleStatusBar: cfg.get('riverShade.toggleStatusBar', cfg.get('focusColorToggle.toggleStatusBar', true))
+    toggleStatusBar: cfg.get('riverShade.toggleStatusBar', cfg.get('focusColorToggle.toggleStatusBar', true)),
+    colorScheme: cfg.get('riverShade.colorScheme', cfg.get('focusColorToggle.colorScheme', 'default'))
   };
   // When running in development or test mode, also log to console and write an activation file
   if (extensionMode === vscode.ExtensionMode.Development || extensionMode === vscode.ExtensionMode.Test) {
@@ -186,16 +193,18 @@ function activate(context) {
 
   // apply initial state
   if (settings.enabled) {
-    applyColors(buildColorsSet(vscode.window.state.focused ? ACTIVE : INACTIVE, settings))
+    const scheme = getColorScheme(cfg);
+    applyColors(buildColorsSet(vscode.window.state.focused ? scheme.ACTIVE : scheme.INACTIVE, settings))
       .catch(err => {
-          try { if (outputChannel) outputChannel.appendLine('Initial applyColors failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
-          console.error('Initial applyColors failed', err);
-        });
+        try { if (outputChannel) outputChannel.appendLine('Initial applyColors failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
+        console.error('Initial applyColors failed', err);
+      });
   }
 
   const sub = vscode.window.onDidChangeWindowState(st => {
     if (!settings.enabled) return;
-    applyColors(buildColorsSet(st.focused ? ACTIVE : INACTIVE, settings));
+    const scheme = getColorScheme(cfg);
+    applyColors(buildColorsSet(st.focused ? scheme.ACTIVE : scheme.INACTIVE, settings));
   });
   context.subscriptions.push(sub);
 
@@ -203,7 +212,8 @@ function activate(context) {
   if (vscode.window.onDidChangeActiveColorTheme) {
     const themeSub = vscode.window.onDidChangeActiveColorTheme(() => {
       if (!settings.enabled) return;
-      applyColors(buildColorsSet(vscode.window.state.focused ? ACTIVE : INACTIVE, settings));
+      const scheme = getColorScheme(cfg);
+      applyColors(buildColorsSet(vscode.window.state.focused ? scheme.ACTIVE : scheme.INACTIVE, settings));
     });
     context.subscriptions.push(themeSub);
   }
@@ -215,7 +225,8 @@ function activate(context) {
       return;
     }
     try {
-      applyColors(buildColorsSet(isFocused ? INACTIVE : ACTIVE, settings))
+      const scheme = getColorScheme(cfg);
+      applyColors(buildColorsSet(isFocused ? scheme.INACTIVE : scheme.ACTIVE, settings))
         .then(() => vscode.window.showInformationMessage('Toggled focus colors'))
         .catch(err => {
           try { if (outputChannel) outputChannel.appendLine('focusColorToggle.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
@@ -236,7 +247,8 @@ function activate(context) {
       return;
     }
     try {
-      applyColors(buildColorsSet(isFocused ? INACTIVE : ACTIVE, settings))
+      const scheme = getColorScheme(cfg);
+      applyColors(buildColorsSet(isFocused ? scheme.INACTIVE : scheme.ACTIVE, settings))
         .then(() => vscode.window.showInformationMessage('RiverShade: Toggled focus colors'))
         .catch(err => {
           try { if (outputChannel) outputChannel.appendLine('rivershade.toggle failed: ' + (err && err.message)); } catch (e) { /* ignore */ }

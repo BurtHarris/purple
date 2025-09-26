@@ -84,6 +84,16 @@
           "description": "Where to write workbench.colorCustomizations: 'global' (User), 'workspace', or 'both'."
         }
         ,
+        "focusColorToggle.colorScheme": {
+          "type": "string",
+          "default": "default",
+          "description": "Select the color scheme for focus color toggle. 'default' uses the built-in colors."
+        },
+        "riverShade.colorScheme": {
+          "type": "string",
+          "default": "default",
+          "description": "Select the color scheme for RiverShade. 'default' uses the built-in colors."
+        }
         "riverShade.updateTarget": {
           "type": "string",
           "enum": ["global", "workspace", "both"],
