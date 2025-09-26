@@ -327,19 +327,82 @@ async function removeBling() {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: removed bling in configured targets'); } catch (e) { /* ignore */ }
     try { vscode.window.showInformationMessage('RiverShade: bling removed.'); } catch (e) { /* ignore UI errors */ }
 
-    // Keep suppression for a short window to avoid immediate reapply races
-    // triggered by window/theme events that may occur right after removal.
-    const DEBOUNCE_MS = 400;
-    return new Promise(resolve => {
-      setTimeout(() => {
+    // After initial removes, poll the inspect result and retry clearing any
+    // remaining bling for a bounded period. This helps catch races where
+    // Settings Sync or other writers reintroduce keys shortly after we clear
+    // them. We'll retry every 300ms up to ~3 seconds total.
+    const RETRY_INTERVAL_MS = 300;
+    const RETRY_MAX_MS = 3000;
+    const start = Date.now();
+    traceLog('removeBling: entering verification/retry loop', { start, RETRY_INTERVAL_MS, RETRY_MAX_MS });
+
+    async function checkAndRetry() {
+      try {
+        const postInspect = cfg.inspect('workbench.colorCustomizations') || {};
+        traceLog('removeBling: verification inspect', postInspect);
+        // Collect any scopes that still have keys
+        const scopes = [
+          ['globalValue', postInspect.globalValue],
+          ['globalLocalValue', postInspect.globalLocalValue],
+          ['workspaceValue', postInspect.workspaceValue],
+          ['workspaceFolderValue', postInspect.workspaceFolderValue]
+        ];
+        const remainingScopes = scopes.filter(([, v]) => v && Object.keys(v).length).map(([name]) => name);
+        if (remainingScopes.length === 0) {
+          traceLog('removeBling: verification succeeded, no remaining keys', { elapsed: Date.now() - start });
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: post-remove: no remaining keys found in inspect'); } catch (e) { /* ignore */ }
+          _suppressAutoApply = false;
+          _operationInProgress = false;
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: _operationInProgress cleared'); } catch (e) { /* ignore */ }
+          return true;
+        }
+
+        // If we still have remaining keys and we've exceeded the retry window, give up
+        if (Date.now() - start > RETRY_MAX_MS) {
+          traceLog('removeBling: verification timed out, remaining scopes', remainingScopes);
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: post-remove: scopes still containing keys: ' + remainingScopes.join(', ')); } catch (e) { /* ignore */ }
+          _suppressAutoApply = false;
+          _operationInProgress = false;
+          try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: _operationInProgress cleared (timeout)'); } catch (e) { /* ignore */ }
+          return false;
+        }
+
+        // Attempt to clear remaining scopes again: try workspace/global updates and folder clears
+        traceLog('removeBling: retrying clears for remaining scopes', remainingScopes);
+        const retryUpdates = [];
+        try {
+          // Rebuild an empty value for global/workspace levels
+          const empty = undefined;
+          retryUpdates.push(cfg.update('workbench.colorCustomizations', empty, vscode.ConfigurationTarget.Global).catch(() => {}));
+          retryUpdates.push(cfg.update('workbench.colorCustomizations', empty, vscode.ConfigurationTarget.Workspace).catch(() => {}));
+        } catch (e) { /* ignore */ }
+
+        // Reattempt folder clears
+        try {
+          const folders = vscode.workspace.workspaceFolders || [];
+          for (const f of folders) {
+            try {
+              const folderCfg = vscode.workspace.getConfiguration(undefined, f.uri);
+              retryUpdates.push(folderCfg.update('workbench.colorCustomizations', undefined, vscode.ConfigurationTarget.WorkspaceFolder).catch(() => {}));
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+
+        try { await Promise.all(retryUpdates); } catch (e) { /* ignore */ }
+
+        // Wait and re-check
+        await new Promise(r => setTimeout(r, RETRY_INTERVAL_MS));
+        return checkAndRetry();
+      } catch (e) {
+        traceLog('removeBling: verification loop error', e && e.message);
         _suppressAutoApply = false;
         _operationInProgress = false;
-        traceLog('removeBling: debounce cleared', { _suppressAutoApply, _operationInProgress });
-        try { if (outputChannel) outputChannel.appendLine(`RiverShade: _suppressAutoApply cleared after ${DEBOUNCE_MS}ms`); } catch (e) { /* ignore */ }
-        try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: _operationInProgress cleared'); } catch (e) { /* ignore */ }
-        resolve(true);
-      }, DEBOUNCE_MS);
-    });
+        try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling: verification failed: ' + (e && e.message)); } catch (e) { /* ignore */ }
+        return false;
+      }
+    }
+
+    return checkAndRetry();
   }).catch(err => {
     try { if (outputChannel) outputChannel.appendLine('RiverShade: removeBling failed: ' + (err && err.message)); } catch (e) { /* ignore */ }
     try { vscode.window.showErrorMessage('RiverShade: failed to remove bling'); } catch (e) { /* ignore UI errors */ }
