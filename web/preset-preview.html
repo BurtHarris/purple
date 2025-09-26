@@ -136,7 +136,7 @@
   </div>
 
   <script>
-    const PRESET = {
+  const PALETTE = {
       themePrimary: getComputedStyle(document.documentElement).getPropertyValue('--themePrimary').trim(),
       themeSecondary: getComputedStyle(document.documentElement).getPropertyValue('--themeSecondary').trim(),
       themeTertiary: getComputedStyle(document.documentElement).getPropertyValue('--themeTertiary').trim(),
@@ -150,7 +150,7 @@
       neutralQuaternaryAlt: getComputedStyle(document.documentElement).getPropertyValue('--neutralQuaternaryAlt').trim()
     };
 
-    function mapPresetToColors(p) {
+    function mapPaletteToColors(p) {
       return {
         'titleBar.activeBackground': p.themePrimary,
         'titleBar.activeForeground': p.neutralPrimary,
@@ -181,23 +181,23 @@
         'panel.dropBorder': p.themeTertiary,
         'activityBar.dropBorder': p.themeTertiary
       };
-    }
+  }
 
     const jsonOut = document.getElementById('jsonOut');
     const primaryPicker = document.createElement('input');
     primaryPicker.type = 'color';
     primaryPicker.id = 'primaryPicker';
-    primaryPicker.value = PRESET.themePrimary;
+  primaryPicker.value = PALETTE.themePrimary;
 
     const secondaryPicker = document.createElement('input');
     secondaryPicker.type = 'color';
     secondaryPicker.id = 'secondaryPicker';
-    secondaryPicker.value = PRESET.themeSecondary;
+  secondaryPicker.value = PALETTE.themeSecondary;
 
     const tertiaryPicker = document.createElement('input');
     tertiaryPicker.type = 'color';
     tertiaryPicker.id = 'tertiaryPicker';
-    tertiaryPicker.value = PRESET.themeTertiary;
+  tertiaryPicker.value = PALETTE.themeTertiary;
 
     // Insert pickers into controls row near the toggle button
     const controlsRow = document.querySelector('.controls-row');
@@ -238,7 +238,7 @@
           const ok = c.to('oklch');
           const [L, C, H] = Array.isArray(ok) ? ok : (ok.coords || [ok.l, ok.c, ok.h]);
 
-          // For dark theme neutrals: increase lightness toward white (L up) and reduce chroma
+      // For dark theme neutrals: increase lightness toward white (L up) and reduce chroma
           function mkNeutral(deltaL, cMult) {
             const newL = (L > 2) ? Math.max(0, Math.min(100, L + deltaL)) : Math.max(0, Math.min(1, L + deltaL / 100));
             const newC = C * cMult;
@@ -262,38 +262,40 @@
           neutralQuaternaryAlt = mkSurface(34);
         } catch (e) {
           // Fall back to previous values on error
-          neutralPrimary = PRESET.neutralPrimary;
-          neutralSecondary = PRESET.neutralSecondary;
-          neutralTertiary = PRESET.neutralTertiary;
-          neutralLight = PRESET.neutralLight;
-          neutralLighter = PRESET.neutralLighter;
-          neutralQuaternaryAlt = PRESET.neutralQuaternaryAlt;
+          neutralPrimary = PALETTE.neutralPrimary || PALETTE.neutralPrimary;
+          neutralSecondary = PALETTE.neutralSecondary || PALETTE.neutralSecondary;
+          neutralTertiary = PALETTE.neutralTertiary || PALETTE.neutralTertiary;
+          neutralLight = PALETTE.neutralLight || PALETTE.neutralLight;
+          neutralLighter = PALETTE.neutralLighter || PALETTE.neutralLighter;
+          neutralQuaternaryAlt = PALETTE.neutralQuaternaryAlt || PALETTE.neutralQuaternaryAlt;
         }
       } else {
         // Fallback: reuse existing heuristics (simple fallbacks)
-        neutralPrimary = PRESET.neutralPrimary;
-        neutralSecondary = PRESET.neutralSecondary;
-        neutralTertiary = PRESET.neutralTertiary;
-        neutralLight = PRESET.neutralLight;
-        neutralLighter = PRESET.neutralLighter;
-        neutralQuaternaryAlt = PRESET.neutralQuaternaryAlt;
+        neutralPrimary = PALETTE.neutralPrimary;
+        neutralSecondary = PALETTE.neutralSecondary;
+        neutralTertiary = PALETTE.neutralTertiary;
+        neutralLight = PALETTE.neutralLight;
+        neutralLighter = PALETTE.neutralLighter;
+        neutralQuaternaryAlt = PALETTE.neutralQuaternaryAlt;
       }
 
-      // Update PRESET and CSS vars
-      PRESET.themePrimary = hexPrimary;
-      PRESET.themeSecondary = hexSecondary;
-      PRESET.themeTertiary = hexTertiary;
-      PRESET.neutralPrimary = neutralPrimary;
-      PRESET.neutralSecondary = neutralSecondary;
-      PRESET.neutralTertiary = neutralTertiary;
-      PRESET.neutralLight = neutralLight;
-      PRESET.neutralLighter = neutralLighter;
-      PRESET.neutralQuaternaryAlt = neutralQuaternaryAlt;
+    // Update PALETTE and CSS vars (keep PRESET alias for backward compatibility)
+  PALETTE.themePrimary = hexPrimary;
+  PALETTE.themeSecondary = hexSecondary;
+  PALETTE.themeTertiary = hexTertiary;
+    PALETTE.neutralPrimary = neutralPrimary;
+    PALETTE.neutralSecondary = neutralSecondary;
+    PALETTE.neutralTertiary = neutralTertiary;
+    PALETTE.neutralLight = neutralLight;
+    PALETTE.neutralLighter = neutralLighter;
+    PALETTE.neutralQuaternaryAlt = neutralQuaternaryAlt;
+    // legacy alias
+    window.PRESET = window.PALETTE = PALETTE;
 
       const root = document.documentElement.style;
-      root.setProperty('--themePrimary', PRESET.themePrimary);
-      root.setProperty('--themeSecondary', PRESET.themeSecondary);
-      root.setProperty('--themeTertiary', PRESET.themeTertiary);
+  root.setProperty('--themePrimary', PALETTE.themePrimary);
+  root.setProperty('--themeSecondary', PALETTE.themeSecondary);
+  root.setProperty('--themeTertiary', PALETTE.themeTertiary);
       root.setProperty('--neutralPrimary', PRESET.neutralPrimary);
       root.setProperty('--neutralSecondary', PRESET.neutralSecondary);
       root.setProperty('--neutralTertiary', PRESET.neutralTertiary);
@@ -319,7 +321,7 @@
     });
 
     function refresh() {
-      const mapping = mapPresetToColors(PRESET);
+  const mapping = mapPaletteToColors(PALETTE);
       jsonOut.textContent = JSON.stringify({ 'workbench.colorCustomizations': mapping }, null, 2);
     }
 
@@ -334,7 +336,7 @@
     });
 
     document.getElementById('copyJson').addEventListener('click', async () => {
-      const mapping = mapPresetToColors(PRESET);
+  const mapping = mapPaletteToColors(PALETTE);
       const text = JSON.stringify({ 'workbench.colorCustomizations': mapping }, null, 2);
       try { await navigator.clipboard.writeText(text); alert('Copied JSON to clipboard'); } catch (e) { prompt('Copy this JSON', text); }
     });

@@ -16,56 +16,46 @@
 <body>
   <h3>RiverShade — Palette Picker</h3>
   <div class="row"><label>Primary</label><input id="primary" type="color" value="#5c2d91"></div>
-  <div class="row"><label>Secondary</label><input id="secondary" type="color" value="#7c3aed"></div>
+  <div class="row"><label>Secondary</label><input id="secondary" type="color" value="#7caed"></div>
   <div class="row"><label>Tertiary</label><input id="tertiary" type="color" value="#9b6ef6"></div>
   <div class="controls"><button id="ok">OK</button><button id="cancel">Cancel</button></div>
 
   <script>
-    const vscode = acquireVsCodeApi ? acquireVsCodeApi() : { postMessage: () => {} };
+    // Safe acquireVsCodeApi fallback for tests/outside webview
+    const vscode = (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : { postMessage: () => {} };
     const prim = document.getElementById('primary');
     const sec = document.getElementById('secondary');
     const ter = document.getElementById('tertiary');
-    function sendPreview(){ vscode.postMessage({ type:'preview', palette:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value }, preset:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value } }); }
-    prim.addEventListener('input', sendPreview); sec.addEventListener('input', sendPreview); ter.addEventListener('input', sendPreview);
-    document.getElementById('ok').addEventListener('click', () => vscode.postMessage({ type:'apply', palette:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value }, preset:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value } }));
-    document.getElementById('cancel').addEventListener('click', () => vscode.postMessage({ type:'cancel' }));
-    window.addEventListener('message', ev => { const msg = ev.data || {}; if (msg.type === 'sync' && msg.data) { const p = msg.data; if (p['titleBar.activeBackground']) prim.value = p['titleBar.activeBackground']; if (p['activityBar.background']) sec.value = p['activityBar.background']; if (p['titleBar.border']) ter.value = p['titleBar.border']; try { sendPreview(); } catch (e) {} } });
-    sendPreview();
-  </script>
-</body>
-</html>
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>RiverShade Palette Picker</title>
-<style>
-  body{ font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial; margin:12px; color:#ddd; background:#1e1e1e }
-  .row{ display:flex; gap:12px; align-items:center; margin-bottom:10px }
-  label{ width:120px }
-  input[type=color]{ width:56px; height:32px; border:0; }
-  .controls{ margin-top:12px; display:flex; gap:8px }
-  button{ padding:6px 10px }
-</style>
-</head>
-<body>
-  <h3>RiverShade — Palette Picker</h3>
-  <div class="row"><label>Primary</label><input id="primary" type="color" value="#5c2d91"></div>
-  <div class="row"><label>Secondary</label><input id="secondary" type="color" value="#7c3aed"></div>
-  <div class="row"><label>Tertiary</label><input id="tertiary" type="color" value="#9b6ef6"></div>
-  <div class="controls"><button id="ok">OK</button><button id="cancel">Cancel</button></div>
 
-  <script>
-    const vscode = acquireVsCodeApi();
-    const prim = document.getElementById('primary');
-    const sec = document.getElementById('secondary');
-    const ter = document.getElementById('tertiary');
-    function sendPreview(){ vscode.postMessage({ type:'preview', palette:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value } }); }
-    prim.addEventListener('input', sendPreview); sec.addEventListener('input', sendPreview); ter.addEventListener('input', sendPreview);
-    document.getElementById('ok').addEventListener('click', () => vscode.postMessage({ type:'apply', palette:{ themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value } }));
-    document.getElementById('cancel').addEventListener('click', () => vscode.postMessage({ type:'cancel' }));
-    window.addEventListener('message', ev => { const msg = ev.data || {}; if (msg.type === 'sync' && msg.data) { const p = msg.data; if (p['titleBar.activeBackground']) prim.value = p['titleBar.activeBackground']; if (p['activityBar.background']) sec.value = p['activityBar.background']; if (p['titleBar.border']) ter.value = p['titleBar.border']; try { sendPreview(); } catch (e) {} } });
+    function sendPreview(){
+      const payload = { themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value };
+      // Send both palette and legacy preset keys for compatibility
+      vscode.postMessage({ type: 'preview', palette: payload, preset: payload });
+    }
+
+    prim.addEventListener('input', sendPreview);
+    sec.addEventListener('input', sendPreview);
+    ter.addEventListener('input', sendPreview);
+
+    document.getElementById('ok').addEventListener('click', () => {
+      const payload = { themePrimary: prim.value, themeSecondary: sec.value, themeTertiary: ter.value };
+      vscode.postMessage({ type: 'apply', palette: payload, preset: payload });
+    });
+
+    document.getElementById('cancel').addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
+
+    window.addEventListener('message', ev => {
+      const msg = ev.data || {};
+      if (msg.type === 'sync' && msg.data) {
+        const p = msg.data;
+        if (p['titleBar.activeBackground']) prim.value = p['titleBar.activeBackground'];
+        if (p['activityBar.background']) sec.value = p['activityBar.background'];
+        if (p['titleBar.border']) ter.value = p['titleBar.border'];
+        try { sendPreview(); } catch (e) { /* ignore */ }
+      }
+    });
+
+    // initialize
     sendPreview();
   </script>
 </body>

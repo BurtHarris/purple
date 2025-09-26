@@ -1,6 +1,6 @@
-Preset preview (Vite)
+Palette preview (Vite)
 
-This folder contains a simple preview page for Fluent presets.
+This folder contains a simple preview page for Fluent palettes.
 
 Usage
 
